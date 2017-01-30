@@ -159,6 +159,7 @@ DESCRIPTION
 .  bfd_target_os9k_flavour,
 .  bfd_target_versados_flavour,
 .  bfd_target_msdos_flavour,
+.  bfd_target_omf_flavour,
 .  bfd_target_ovax_flavour,
 .  bfd_target_evax_flavour,
 .  bfd_target_mmo_flavour,
@@ -665,6 +666,7 @@ extern const bfd_target i386_elf32_sol2_vec;
 extern const bfd_target i386_elf32_vxworks_vec;
 extern const bfd_target i386_mach_o_vec;
 extern const bfd_target i386_msdos_vec;
+extern const bfd_target i386_omf_vec;
 extern const bfd_target i386_pe_vec;
 extern const bfd_target i386_pei_vec;
 extern const bfd_target iamcu_elf32_vec;
@@ -1015,6 +1017,7 @@ static const bfd_target * const _bfd_target_vector[] =
 	&i386_elf32_vxworks_vec,
 	&i386_mach_o_vec,
 	&i386_msdos_vec,
+	&i386_omf_vec,
 	&i386_pe_vec,
 	&i386_pei_vec,
 

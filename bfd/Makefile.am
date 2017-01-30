@@ -82,7 +82,7 @@ BFD32_LIBS_CFILES = \
 	archive.c archures.c bfd.c bfdio.c bfdwin.c cache.c coff-bfd.c \
 	compress.c corefile.c elf-properties.c format.c hash.c \
 	init.c libbfd.c linker.c merge.c opncls.c reloc.c \
-	section.c simple.c stab-syms.c stabs.c syms.c targets.c \
+	section.c simple.c stab-syms.c stabs.c strtab.c syms.c targets.c \
 	binary.c ihex.c srec.c tekhex.c verilog.c
 
 BFD64_LIBS_CFILES = archive64.c
@@ -366,6 +366,7 @@ BFD32_BACKENDS = \
 	i386bsd.lo \
 	i386lynx.lo \
 	i386msdos.lo \
+	i386omf.lo \
 	mach-o.lo \
 	mach-o-i386.lo \
 	mach-o-arm.lo \
@@ -503,6 +504,7 @@ BFD32_BACKENDS_CFILES = \
 	i386bsd.c \
 	i386lynx.c \
 	i386msdos.c \
+	i386omf.c \
 	mach-o.c \
 	mach-o-i386.c \
 	mach-o-arm.c \

@@ -7491,6 +7491,7 @@ enum bfd_flavour
   bfd_target_os9k_flavour,
   bfd_target_versados_flavour,
   bfd_target_msdos_flavour,
+  bfd_target_omf_flavour,
   bfd_target_ovax_flavour,
   bfd_target_evax_flavour,
   bfd_target_mmo_flavour,
