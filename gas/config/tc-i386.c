@@ -3046,6 +3046,8 @@ tc_i386_fix_adjustable (fixS *fixP ATTRIBUTE_UNUSED)
       || fixP->fx_r_type == BFD_RELOC_386_TLS_LE
       || fixP->fx_r_type == BFD_RELOC_386_TLS_GOTDESC
       || fixP->fx_r_type == BFD_RELOC_386_TLS_DESC_CALL
+      || fixP->fx_r_type == BFD_RELOC_386_SEGMENT16
+      || fixP->fx_r_type == BFD_RELOC_386_RELSEG16
       || fixP->fx_r_type == BFD_RELOC_X86_64_PLT32
       || fixP->fx_r_type == BFD_RELOC_X86_64_GOT32
       || fixP->fx_r_type == BFD_RELOC_X86_64_GOTPCREL
@@ -7706,6 +7708,9 @@ lex_got (enum bfd_reloc_code_real *rel,
     { STRING_COMMA_LEN ("TLSCALL"),  { BFD_RELOC_386_TLS_DESC_CALL,
 				       BFD_RELOC_X86_64_TLSDESC_CALL },
       OPERAND_TYPE_IMM32_32S_DISP32 },
+    { STRING_COMMA_LEN ("RELSEG16"), { BFD_RELOC_386_RELSEG16,
+				       _dummy_first_bfd_reloc_code_real },
+      OPERAND_TYPE_NONE },
   };
   char *cp;
   unsigned int j;
@@ -7733,13 +7738,18 @@ lex_got (enum bfd_reloc_code_real *rel,
 
 	      if (types)
 		{
-		  if (flag_code != CODE_64BIT)
+		  if (flag_code == CODE_64BIT)
+		    *types = gotrel[j].types64;
+		  else if (flag_code == CODE_32BIT)
 		    {
 		      types->bitfield.imm32 = 1;
 		      types->bitfield.disp32 = 1;
 		    }
 		  else
-		    *types = gotrel[j].types64;
+		    {
+		      types->bitfield.imm16 = 1;
+		      types->bitfield.disp16 = 1;
+		    }
 		}
 
 	      if (j != 0 && GOT_symbol == NULL)
