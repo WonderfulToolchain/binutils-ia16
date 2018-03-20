@@ -3553,6 +3553,8 @@ tc_i386_fix_adjustable (fixS *fixP ATTRIBUTE_UNUSED)
       || fixP->fx_r_type == BFD_RELOC_386_TLS_LE
       || fixP->fx_r_type == BFD_RELOC_386_TLS_GOTDESC
       || fixP->fx_r_type == BFD_RELOC_386_TLS_DESC_CALL
+      || fixP->fx_r_type == BFD_RELOC_386_SEGMENT16
+      || fixP->fx_r_type == BFD_RELOC_386_RELSEG16
       || fixP->fx_r_type == BFD_RELOC_X86_64_GOT32
       || fixP->fx_r_type == BFD_RELOC_X86_64_GOTPCREL
       || fixP->fx_r_type == BFD_RELOC_X86_64_GOTPCRELX
@@ -10350,6 +10352,9 @@ lex_got (enum bfd_reloc_code_real *rel,
     { STRING_COMMA_LEN ("SEG"),      { BFD_RELOC_386_SEG16,
 				       0 /* not supported */ },
       2, OPERAND_TYPE_IMM16, false },
+    { STRING_COMMA_LEN ("RELSEG16"), { BFD_RELOC_386_RELSEG16,
+				       _dummy_first_bfd_reloc_code_real },
+      2, OPERAND_TYPE_NONE, false },
 #endif
     { STRING_COMMA_LEN ("PLTOFF"),   { _dummy_first_bfd_reloc_code_real,
 				       BFD_RELOC_X86_64_PLTOFF64 },
@@ -10434,6 +10439,7 @@ lex_got (enum bfd_reloc_code_real *rel,
 	    {
 	      int first, second;
 	      char *tmpbuf, *past_reloc;
+	      enum bfd_reloc_code_real r;
 
 	      if ((gotrel[j].sizemask & size) == 0) {
 		as_bad (_("invalid operand size for @%s reloc with %d-bit output format"),
@@ -10441,11 +10447,14 @@ lex_got (enum bfd_reloc_code_real *rel,
 		return NULL;
 	      }
 
-	      *rel = gotrel[j].rel[object_64bit];
+	      r = gotrel[j].rel[object_64bit];
+	      *rel = r;
 
 	      if (types)
 		{
-		  if (flag_code != CODE_64BIT)
+		  if (flag_code == CODE_64BIT)
+		    *types = gotrel[j].types64;
+		  else if (flag_code == CODE_32BIT)
 		    {
 		      if (gotrel[j].sizemask & size & 2) {
 			types->bitfield.imm16 = 1;
@@ -10457,7 +10466,10 @@ lex_got (enum bfd_reloc_code_real *rel,
 		      }
 		    }
 		  else
-		    *types = gotrel[j].types64;
+		    {
+		      types->bitfield.imm16 = 1;
+		      types->bitfield.disp16 = 1;
+		    }
 		}
 
 	      if (gotrel[j].need_GOT_symbol && GOT_symbol == NULL)
@@ -14514,6 +14526,9 @@ tc_gen_reloc (asection *section ATTRIBUTE_UNUSED, fixS *fixp)
     case BFD_RELOC_386_TLS_GOTDESC:
     case BFD_RELOC_386_TLS_DESC_CALL:
     case BFD_RELOC_386_SEG16:
+    case BFD_RELOC_386_SUB16:
+    case BFD_RELOC_386_SUB32:
+    case BFD_RELOC_386_RELSEG16:
     case BFD_RELOC_X86_64_TLSGD:
     case BFD_RELOC_X86_64_TLSLD:
     case BFD_RELOC_X86_64_DTPOFF32:
