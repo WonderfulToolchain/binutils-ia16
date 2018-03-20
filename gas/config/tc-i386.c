@@ -7733,8 +7733,10 @@ lex_got (enum bfd_reloc_code_real *rel,
 	    {
 	      int first, second;
 	      char *tmpbuf, *past_reloc;
+	      enum bfd_reloc_code_real r;
 
-	      *rel = gotrel[j].rel[object_64bit];
+	      r = gotrel[j].rel[object_64bit];
+	      *rel = r;
 
 	      if (types)
 		{
@@ -7752,7 +7754,9 @@ lex_got (enum bfd_reloc_code_real *rel,
 		    }
 		}
 
-	      if (j != 0 && GOT_symbol == NULL)
+	      if (r != BFD_RELOC_SIZE32
+		  && r != BFD_RELOC_386_RELSEG16
+		  && GOT_symbol == NULL)
 		GOT_symbol = symbol_find_or_make (GLOBAL_OFFSET_TABLE_NAME);
 
 	      /* The length of the first part of our input line.  */
@@ -10785,6 +10789,7 @@ tc_gen_reloc (asection *section ATTRIBUTE_UNUSED, fixS *fixp)
     case BFD_RELOC_386_TLS_LE:
     case BFD_RELOC_386_TLS_GOTDESC:
     case BFD_RELOC_386_TLS_DESC_CALL:
+    case BFD_RELOC_386_RELSEG16:
     case BFD_RELOC_X86_64_TLSGD:
     case BFD_RELOC_X86_64_TLSLD:
     case BFD_RELOC_X86_64_DTPOFF32:
