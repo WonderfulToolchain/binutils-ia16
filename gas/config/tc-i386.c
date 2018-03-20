@@ -3046,6 +3046,8 @@ tc_i386_fix_adjustable (fixS *fixP ATTRIBUTE_UNUSED)
       || fixP->fx_r_type == BFD_RELOC_386_TLS_LE
       || fixP->fx_r_type == BFD_RELOC_386_TLS_GOTDESC
       || fixP->fx_r_type == BFD_RELOC_386_TLS_DESC_CALL
+      || fixP->fx_r_type == BFD_RELOC_386_SEGMENT16
+      || fixP->fx_r_type == BFD_RELOC_386_RELSEG16
       || fixP->fx_r_type == BFD_RELOC_X86_64_PLT32
       || fixP->fx_r_type == BFD_RELOC_X86_64_GOT32
       || fixP->fx_r_type == BFD_RELOC_X86_64_GOTPCREL
@@ -7706,6 +7708,9 @@ lex_got (enum bfd_reloc_code_real *rel,
     { STRING_COMMA_LEN ("TLSCALL"),  { BFD_RELOC_386_TLS_DESC_CALL,
 				       BFD_RELOC_X86_64_TLSDESC_CALL },
       OPERAND_TYPE_IMM32_32S_DISP32 },
+    { STRING_COMMA_LEN ("RELSEG16"), { BFD_RELOC_386_RELSEG16,
+				       _dummy_first_bfd_reloc_code_real },
+      OPERAND_TYPE_NONE },
   };
   char *cp;
   unsigned int j;
@@ -7728,21 +7733,30 @@ lex_got (enum bfd_reloc_code_real *rel,
 	    {
 	      int first, second;
 	      char *tmpbuf, *past_reloc;
+	      enum bfd_reloc_code_real r;
 
-	      *rel = gotrel[j].rel[object_64bit];
+	      r = gotrel[j].rel[object_64bit];
+	      *rel = r;
 
 	      if (types)
 		{
-		  if (flag_code != CODE_64BIT)
+		  if (flag_code == CODE_64BIT)
+		    *types = gotrel[j].types64;
+		  else if (flag_code == CODE_32BIT)
 		    {
 		      types->bitfield.imm32 = 1;
 		      types->bitfield.disp32 = 1;
 		    }
 		  else
-		    *types = gotrel[j].types64;
+		    {
+		      types->bitfield.imm16 = 1;
+		      types->bitfield.disp16 = 1;
+		    }
 		}
 
-	      if (j != 0 && GOT_symbol == NULL)
+	      if (r != BFD_RELOC_SIZE32
+		  && r != BFD_RELOC_386_RELSEG16
+		  && GOT_symbol == NULL)
 		GOT_symbol = symbol_find_or_make (GLOBAL_OFFSET_TABLE_NAME);
 
 	      /* The length of the first part of our input line.  */
@@ -10775,6 +10789,7 @@ tc_gen_reloc (asection *section ATTRIBUTE_UNUSED, fixS *fixp)
     case BFD_RELOC_386_TLS_LE:
     case BFD_RELOC_386_TLS_GOTDESC:
     case BFD_RELOC_386_TLS_DESC_CALL:
+    case BFD_RELOC_386_RELSEG16:
     case BFD_RELOC_X86_64_TLSGD:
     case BFD_RELOC_X86_64_TLSLD:
     case BFD_RELOC_X86_64_DTPOFF32:
