@@ -8851,10 +8851,13 @@ lex_got (enum bfd_reloc_code_real *rel,
     { STRING_COMMA_LEN ("SEG"),      { BFD_RELOC_386_SEG16,
 				       0 /* not supported */ },
       2, OPERAND_TYPE_IMM16 },
+    { STRING_COMMA_LEN ("SEGMENT16"),{ BFD_RELOC_386_SEGMENT16,
+				       _dummy_first_bfd_reloc_code_real },
+      2, OPERAND_TYPE_NONE },
     { STRING_COMMA_LEN ("RELSEG16"), { BFD_RELOC_386_RELSEG16,
 				       _dummy_first_bfd_reloc_code_real },
       2, OPERAND_TYPE_NONE },
-# define FIRST_NEED_GOT_SYMBOL 3
+# define FIRST_NEED_GOT_SYMBOL 4
 #else
 # define FIRST_NEED_GOT_SYMBOL 0
 #endif
@@ -12142,6 +12145,7 @@ tc_gen_reloc (asection *section ATTRIBUTE_UNUSED, fixS *fixp)
     case BFD_RELOC_386_SEG16:
     case BFD_RELOC_386_SUB16:
     case BFD_RELOC_386_SUB32:
+    case BFD_RELOC_386_SEGMENT16:
     case BFD_RELOC_386_RELSEG16:
     case BFD_RELOC_X86_64_TLSGD:
     case BFD_RELOC_X86_64_TLSLD:
