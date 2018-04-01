@@ -7708,6 +7708,9 @@ lex_got (enum bfd_reloc_code_real *rel,
     { STRING_COMMA_LEN ("TLSCALL"),  { BFD_RELOC_386_TLS_DESC_CALL,
 				       BFD_RELOC_X86_64_TLSDESC_CALL },
       OPERAND_TYPE_IMM32_32S_DISP32 },
+    { STRING_COMMA_LEN ("SEGMENT16"),{ BFD_RELOC_386_SEGMENT16,
+				       _dummy_first_bfd_reloc_code_real },
+      OPERAND_TYPE_NONE },
     { STRING_COMMA_LEN ("RELSEG16"), { BFD_RELOC_386_RELSEG16,
 				       _dummy_first_bfd_reloc_code_real },
       OPERAND_TYPE_NONE },
@@ -10789,6 +10792,7 @@ tc_gen_reloc (asection *section ATTRIBUTE_UNUSED, fixS *fixp)
     case BFD_RELOC_386_TLS_LE:
     case BFD_RELOC_386_TLS_GOTDESC:
     case BFD_RELOC_386_TLS_DESC_CALL:
+    case BFD_RELOC_386_SEGMENT16:
     case BFD_RELOC_386_RELSEG16:
     case BFD_RELOC_X86_64_TLSGD:
     case BFD_RELOC_X86_64_TLSLD:
