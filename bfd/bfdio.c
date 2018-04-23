@@ -47,7 +47,7 @@
 file_ptr
 _bfd_real_ftell (FILE *file)
 {
-#if defined (HAVE_FTELLO64)
+#if defined (HAVE_FTELLO64) && ! defined (__DJGPP__)
   return ftello64 (file);
 #elif defined (HAVE_FTELLO)
   return ftello (file);
@@ -59,7 +59,9 @@ _bfd_real_ftell (FILE *file)
 int
 _bfd_real_fseek (FILE *file, file_ptr offset, int whence)
 {
-#if defined (HAVE_FSEEKO64)
+  /* fseeko64 (...) seems broken on DJGPP --- it causes "File format not
+     recognized" errors.  Use fseeko (...) instead.  -- tkchia  */
+#if defined (HAVE_FSEEKO64) && ! defined (__DJGPP__)
   return fseeko64 (file, offset, whence);
 #elif defined (HAVE_FSEEKO)
   return fseeko (file, offset, whence);
