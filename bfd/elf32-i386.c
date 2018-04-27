@@ -227,11 +227,12 @@ bfd_i386_elf_get_paragraph_distance (asection *input_section,
 {
   asection *output_section = input_section->output_section;
   bfd *output_bfd = output_section->owner;
-  bfd_vma dist = output_section->lma - output_section->vma;
+  bfd_vma lma = output_section->lma, vma = output_section->vma;
+  bfd_vma dist = lma / 16 - vma / 16;
 
   asection *hdr_sec = bfd_get_section_by_name (output_bfd, ".msdos_mz_hdr");
 
-  if (dist % 16 != 0)
+  if (lma % 16 != vma % 16)
     {
       /* xgettext:c-format */
       _bfd_error_handler (_("%B: R_386_RELSEG16 with unaligned section `%A'"),
@@ -241,7 +242,7 @@ bfd_i386_elf_get_paragraph_distance (asection *input_section,
 
   if (! hdr_sec)
     {
-      *distance = dist / 16;
+      *distance = dist;
       return TRUE;
     }
 
@@ -253,8 +254,8 @@ bfd_i386_elf_get_paragraph_distance (asection *input_section,
       return FALSE;
     }
 
-  dist -= hdr_sec->lma + hdr_sec->size;
-  *distance = dist / 16;
+  dist -= hdr_sec->lma / 16 + hdr_sec->size / 16;
+  *distance = dist;
   return TRUE;
 }
 
