@@ -232,8 +232,10 @@ bfd_i386_elf_get_paragraph_distance (asection *input_section,
   if (lma % 16 != vma % 16)
     {
       /* xgettext:c-format */
-      _bfd_error_handler (_("%B: R_386_RELSEG16 with unaligned section `%A'"),
-			  output_bfd, output_section);
+      _bfd_error_handler
+	/* xgettext:c-format */
+	(_("%pB: R_386_RELSEG16 with unaligned section `%pA'"),
+	 output_bfd, output_section);
       return FALSE;
     }
 
@@ -246,7 +248,7 @@ bfd_i386_elf_get_paragraph_distance (asection *input_section,
   if (hdr_sec->lma % 16 != 0 || hdr_sec->size % 16 != 0)
     {
       /* xgettext:c-format */
-      _bfd_error_handler (_("%B: R_386_RELSEG16 with unaligned MZ header"),
+      _bfd_error_handler (_("%pB: R_386_RELSEG16 with unaligned MZ header"),
 			  output_bfd);
       return FALSE;
     }
@@ -285,7 +287,7 @@ bfd_i386_elf_segment16_reloc (bfd *abfd, arelent *reloc_entry,
     {
       _bfd_error_handler
 	/* xgettext:c-format */
-	(_("%B: stray R_386_SEGMENT16 relocation in section `%A'"),
+	(_("%pB: stray R_386_SEGMENT16 relocation in section `%pA'"),
 	 abfd, input_section);
       return bfd_reloc_other;
     }
@@ -304,7 +306,7 @@ bfd_i386_elf_segment16_reloc (bfd *abfd, arelent *reloc_entry,
       || ! bfd_set_section_size (output_bfd, mz_section, 4))
     {
       /* xgettext:c-format */
-      _bfd_error_handler (_("%B: cannot create new MZ relocation section"),
+      _bfd_error_handler (_("%pB: cannot create new MZ relocation section"),
 			  output_bfd);
       return bfd_reloc_other;
     }
@@ -314,7 +316,7 @@ bfd_i386_elf_segment16_reloc (bfd *abfd, arelent *reloc_entry,
   if (! contents)
     {
       /* xgettext:c-format */
-      _bfd_error_handler (_("%B: no memory for new MZ relocation"),
+      _bfd_error_handler (_("%pB: no memory for new MZ relocation"),
 			  output_bfd);
       return bfd_reloc_other;
     }
@@ -332,7 +334,7 @@ bfd_i386_elf_segment16_reloc (bfd *abfd, arelent *reloc_entry,
     {
       _bfd_error_handler
 	/* xgettext:c-format */
-	(_("%B: no memory for R_386_RELSEG16 or R_386_16 relocation for MZ"),
+	(_("%pB: no memory for R_386_RELSEG16 or R_386_16 relocation for MZ"),
 	 output_bfd);
       return bfd_reloc_other;
     }
@@ -353,7 +355,7 @@ bfd_i386_elf_segment16_reloc (bfd *abfd, arelent *reloc_entry,
     {
       _bfd_error_handler
 	/* xgettext:c-format */
-	(_("%B: cannot install R_386_RELSEG16 or R_386_16 relocation for MZ"),
+	(_("%pB: cannot install R_386_RELSEG16 or R_386_16 relocation for MZ"),
 	 output_bfd);
       return bfd_reloc_other;
     }
@@ -2922,7 +2924,7 @@ disallow_got32:
 	case R_386_SEGMENT16:
 	  _bfd_error_handler
 	    /* xgettext:c-format */
-	    (_("%B: stray R_386_SEGMENT16 relocation in section `%A'"),
+	    (_("%pB: stray R_386_SEGMENT16 relocation in section `%pA'"),
 	     input_bfd, input_section);
 	  bfd_set_error (bfd_error_bad_value);
 	  return FALSE;
