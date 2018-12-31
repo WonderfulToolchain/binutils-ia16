@@ -10535,7 +10535,7 @@ display_debug_names (struct dwarf_section *section, void *file)
 	{
 	  warn (_("Augmentation string length %u must be rounded up "
 		  "to a multiple of 4 in .debug_names.\n"),
-		augmentation_string_size);
+		(unsigned) augmentation_string_size);
 	  augmentation_string_size += (-augmentation_string_size) & 3;
 	}
       if (augmentation_string_size > (size_t) (unit_end - hdrptr))
@@ -10742,6 +10742,7 @@ display_debug_names (struct dwarf_section *section, void *file)
 	{
 	  uint64_t string_offset, entry_offset;
 	  unsigned char *p;
+
 	  /* We need to scan first whether there is a single or multiple
 	     entries.  TAGNO is -2 for the first entry, it is -1 for the
 	     initial tag read of the second entry, then it becomes 0 for the
