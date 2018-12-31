@@ -6131,7 +6131,7 @@ display_debug_loc (struct dwarf_section *section, void *file)
 	{
 	  warn (_("The %s section contains "
 		  "unsupported offset entry count: %d.\n"),
-		section->name, offset_entry_count);
+		section->name, (int) offset_entry_count);
 	  return 0;
 	}
 
@@ -8606,7 +8606,7 @@ display_debug_names (struct dwarf_section *section, void *file)
 	{
 	  warn (_("Augmentation string length %u must be rounded up "
 		  "to a multiple of 4 in .debug_names.\n"),
-		augmentation_string_size);
+		(unsigned) augmentation_string_size);
 	  augmentation_string_size += (-augmentation_string_size) & 3;
 	}
 
@@ -8804,7 +8804,8 @@ display_debug_names (struct dwarf_section *section, void *file)
 			 name_table_entry_offsets + namei * offset_size,
 			 offset_size, unit_end);
 
-	  printf ("[%3u] #%08x %s:", namei, hash_table_hashes[namei],
+	  printf ("[%3u] #%08x %s:", (unsigned) namei,
+		  (unsigned) hash_table_hashes[namei],
 		  fetch_indirect_string (string_offset));
 
 	  unsigned char *entryptr = entry_pool + entry_offset;
