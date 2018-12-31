@@ -505,7 +505,7 @@ BFD32_LIBS_CFILES = \
 	archive.c archures.c bfd.c bfdio.c bfdwin.c cache.c coff-bfd.c \
 	compress.c corefile.c elf-properties.c format.c hash.c \
 	init.c libbfd.c linker.c merge.c opncls.c reloc.c \
-	section.c simple.c stab-syms.c stabs.c strtab.c syms.c targets.c \
+	section.c simple.c stab-syms.c stabs.c syms.c targets.c \
 	binary.c ihex.c srec.c tekhex.c verilog.c
 
 BFD64_LIBS_CFILES = archive64.c
