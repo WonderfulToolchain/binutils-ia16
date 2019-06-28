@@ -287,6 +287,7 @@ ALL_EMULATION_SOURCES = \
 	eelf_i386_chaos.c \
 	eelf_i386_fbsd.c \
 	eelf_i386_ldso.c \
+	eelf_i386_msdos_mz.c \
 	eelf_i386_nacl.c \
 	eelf_i386_sol2.c \
 	eelf_i386_vxworks.c \
@@ -1302,6 +1303,11 @@ eelf_i386_fbsd.c: $(srcdir)/emulparams/elf_i386_fbsd.sh \
 eelf_i386_ldso.c: $(srcdir)/emulparams/elf_i386_ldso.sh \
   $(ELF_X86_DEPS) $(srcdir)/scripttempl/elf.sc ${GEN_DEPENDS}
 
+eelf_i386_msdos_mz.c: $(srcdir)/emulparams/elf_i386_msdos_mz.sh \
+  $(srcdir)/emulparams/elf_i386.sh \
+  $(srcdir)/emultempl/i386-msdos-mz.em \
+  $(ELF_X86_DEPS) $(srcdir)/scripttempl/elf.sc ${GEN_DEPENDS}
+
 eelf_i386_nacl.c: $(srcdir)/emulparams/elf_i386_nacl.sh \
   $(srcdir)/emulparams/elf_i386.sh \
   $(srcdir)/emulparams/elf_nacl.sh \
@@ -1875,7 +1881,6 @@ emmo.c: $(srcdir)/emulparams/mmo.sh $(srcdir)/emultempl/mmix-elfnmmo.em \
   $(srcdir)/emultempl/generic.em $(srcdir)/emultempl/elf-generic.em \
   $(srcdir)/emultempl/mmo.em $(srcdir)/scripttempl/DWARF.sc \
   $(srcdir)/scripttempl/mmo.sc ${GEN_DEPENDS}
-
 
 # We need this for automake to use YLWRAP.
 EXTRA_ld_new_SOURCES = deffilep.y ldlex.l
