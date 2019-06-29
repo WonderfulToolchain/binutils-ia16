@@ -87,7 +87,11 @@ enum
                             // to argument, returning TLS offset for symbol
   R_386_IRELATIVE = 42,     // Adjust indirectly by program base
   R_386_GOT32X = 43,        // 32 bit GOT entry, relaxable
-  // IA16 extension.
+  // IA16 extension (new experimental).
+  R_386_SEG16X = 45,        // Shift auxiliary symbol by 4 bits
+  R_386_SUB16 = 46,         // Subtract auxiliary symbol value
+  R_386_SUB32 = 47,         // Subtract auxiliary symbol value
+  // IA16 extension (old).
   R_386_SEGMENT16 = 80,     // High 16 bits, adds to exe relocation table
   R_386_RELSEG16 = 81,      // High 16 bits, do not add to exe relocation table
   // Used by Intel.

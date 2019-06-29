@@ -38,10 +38,11 @@ static bfd_vma num_mz_reloc_sections = 0;
 static void
 i386_mz_after_open (void)
 {
-  /* For each input file, check if it uses any R_386_SEGMENT16 relocations.
-     If it does, add a .msdos_mz_reloc.* section to it, with the right size.
+  /* For each input file, check if it uses any R_386_{SEGMENT16, SEG16X}
+     relocations.  If it does, add a .msdos_mz_reloc.* section to it, with
+     the right size.
 
-     Try not to waste memory on sections with no R_386_SEGMENT16
+     Try not to waste memory on sections with no R_386_{SEGMENT16, SEG16X}
      relocations.  -- tkchia  */
   size_t num_new_secs = 0, new_secs_top = 0;
   asection **new_secs = NULL;
@@ -80,7 +81,7 @@ i386_mz_after_open (void)
 	      for (irel = irels; irel != irelend; ++irel)
 		{
 		  long r_type = ELF32_R_TYPE (irel->r_info);
-		  if (r_type == R_386_SEGMENT16)
+		  if (r_type == R_386_SEGMENT16 || r_type == R_386_SEG16X)
 		    {
 		      if (num_mz >= 0xffffu)
 			{
@@ -190,7 +191,8 @@ gld${EMULATION_NAME}_finish (void)
 	      if (hdr_sec->lma % 16 != 0 || hdr_sec->size % 16 != 0)
 		{
 		  /* xgettext:c-format */
-		  einfo (_("%P: R_386_SEGMENT16 with unaligned MZ header\n"));
+		  einfo (_("%P: R_386_SEGMENT16 or R_386_SEG16X with \
+unaligned MZ header\n"));
 		  break;
 		}
 
@@ -223,7 +225,7 @@ gld${EMULATION_NAME}_finish (void)
 		{
 		  long r_info = irel->r_info;
 		  long r_type = ELF32_R_TYPE (r_info);
-		  if (r_type == R_386_SEGMENT16)
+		  if (r_type == R_386_SEGMENT16 || r_type == R_386_SEG16X)
 		    {
 		      bfd_vma olma = osec->lma, ovma = osec->vma;
 		      if (olma % 16 != ovma % 16)

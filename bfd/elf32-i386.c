@@ -155,9 +155,24 @@ static reloc_howto_type elf_howto_table[]=
 
   /* Another gap.  */
 #define R_386_ext2 (R_386_GOT32X + 1 - R_386_tls_offset)
-#define R_386_ia16_offset (R_386_SEGMENT16 - R_386_ext2)
+#define R_386_ia16_new_offset (R_386_SEG16X - R_386_ext2)
 
-  /* IA16.  */
+  /* Newer, experimental IA16 relocations.  */
+  HOWTO(R_386_SEG16X, 4, 1, 16, FALSE, 0, complain_overflow_unsigned,
+	bfd_elf_generic_reloc, "R_386_SEG16X",
+	TRUE, 0xffff, 0xffff, FALSE),
+  HOWTO(R_386_SUB16, 0, 1, 16, FALSE, 0, complain_overflow_bitfield,
+	bfd_elf_generic_reloc, "R_386_SUB16",
+	TRUE, 0xffff, 0xffff, FALSE),
+  HOWTO(R_386_SUB32, 0, 2, 32, FALSE, 0, complain_overflow_bitfield,
+	bfd_elf_generic_reloc, "R_386_SUB32",
+	TRUE, 0xffffffff, 0xffffffff, FALSE),
+
+  /* Yet another gap.  */
+#define R_386_ext3 (R_386_SUB32 + 1 - R_386_ia16_new_offset)
+#define R_386_ia16_old_offset (R_386_SEGMENT16 - R_386_ext3)
+
+  /* Older IA16 relocations.  */
   HOWTO(R_386_SEGMENT16, 0, 1, 16, FALSE, 0, complain_overflow_dont,
 	bfd_i386_elf_segment16_reloc, "R_386_SEGMENT16",
 	TRUE, 0xffff, 0xffff, FALSE),
@@ -165,9 +180,9 @@ static reloc_howto_type elf_howto_table[]=
 	bfd_i386_elf_relseg16_reloc, "R_386_RELSEG16",
 	TRUE, 0xffff, 0xffff, FALSE),
 
-  /* Yet another gap.  */
-#define R_386_ext3 (R_386_RELSEG16 + 1 - R_386_ia16_offset)
-#define R_386_vt_offset (R_386_GNU_VTINHERIT - R_386_ext3)
+  /* And another gap.  */
+#define R_386_ext4 (R_386_RELSEG16 + 1 - R_386_ia16_old_offset)
+#define R_386_vt_offset (R_386_GNU_VTINHERIT - R_386_ext4)
 
 /* GNU extension to record C++ vtable hierarchy.  */
   HOWTO (R_386_GNU_VTINHERIT,	/* type */
@@ -453,13 +468,25 @@ elf_i386_reloc_type_lookup (bfd *abfd,
       TRACE ("BFD_RELOC_386_GOT32X");
       return &elf_howto_table[R_386_GOT32X - R_386_tls_offset];
 
+    case BFD_RELOC_386_SEG16X:
+      TRACE ("BFD_RELOC_386_SEG16X");
+      return &elf_howto_table[R_386_SEG16X - R_386_ia16_new_offset];
+
+    case BFD_RELOC_386_SUB16:
+      TRACE ("BFD_RELOC_386_SUB16");
+      return &elf_howto_table[R_386_SUB16 - R_386_ia16_new_offset];
+
+    case BFD_RELOC_386_SUB32:
+      TRACE ("BFD_RELOC_386_SUB32");
+      return &elf_howto_table[R_386_SUB32 - R_386_ia16_new_offset];
+
     case BFD_RELOC_386_SEGMENT16:
       TRACE ("BFD_RELOC_386_SEGMENT16");
-      return &elf_howto_table[R_386_SEGMENT16 - R_386_ia16_offset];
+      return &elf_howto_table[R_386_SEGMENT16 - R_386_ia16_old_offset];
 
     case BFD_RELOC_386_RELSEG16:
       TRACE ("BFD_RELOC_386_RELSEG16");
-      return &elf_howto_table[R_386_RELSEG16 - R_386_ia16_offset];
+      return &elf_howto_table[R_386_RELSEG16 - R_386_ia16_old_offset];
 
     case BFD_RELOC_VTABLE_INHERIT:
       TRACE ("BFD_RELOC_VTABLE_INHERIT");
@@ -503,10 +530,12 @@ elf_i386_rtype_to_howto (bfd *abfd ATTRIBUTE_UNUSED, unsigned r_type)
 	  >= R_386_ext - R_386_standard)
       && ((indx = r_type - R_386_tls_offset) - R_386_ext
 	  >= R_386_ext2 - R_386_ext)
-      && ((indx = r_type - R_386_ia16_offset) - R_386_ext2
+      && ((indx = r_type - R_386_ia16_new_offset) - R_386_ext2
 	  >= R_386_ext3 - R_386_ext2)
-      && ((indx = r_type - R_386_vt_offset) - R_386_ext3
-	  >= R_386_vt - R_386_ext3))
+      && ((indx = r_type - R_386_ia16_old_offset) - R_386_ext3
+	  >= R_386_ext4 - R_386_ext3)
+      && ((indx = r_type - R_386_vt_offset) - R_386_ext4
+	  >= R_386_vt - R_386_ext4))
       return NULL;
   /* PR 17512: file: 0f67f69d.  */
   if (elf_howto_table [indx].type != r_type)
@@ -2040,6 +2069,25 @@ do_size:
 	    goto error_return;
 	  break;
 
+	case R_386_SEG16X:
+	case R_386_SUB16:
+	case R_386_SUB32:
+	  if (bfd_link_dll (info))
+	    {
+	      reloc_howto_type *howto
+		= elf_i386_rtype_to_howto (abfd, r_type);
+	      if (h)
+		name = h->root.root.string;
+	      else
+		name = bfd_elf_sym_name (abfd, symtab_hdr, isym, NULL);
+	      info->callbacks->einfo
+		(_("%F%P: %pB: unsupported relocation %s against symbol "
+		   "`%s' for shared object\n"),
+		 abfd, howto->name, name);
+	      return FALSE;
+	    }
+	  break;
+
 	default:
 	  break;
 	}
@@ -2145,6 +2193,7 @@ elf_i386_relocate_section (bfd *output_bfd,
   Elf_Internal_Rela *relend;
   bfd_boolean is_vxworks_tls;
   unsigned plt_entry_size;
+  bfd_boolean ignore_reloc_overflow;
 
   /* Skip if check_relocs failed.  */
   if (input_section->check_relocs_failed)
@@ -2171,11 +2220,13 @@ elf_i386_relocate_section (bfd *output_bfd,
 
   plt_entry_size = htab->plt.plt_entry_size;
 
+  ignore_reloc_overflow = FALSE;
   rel = wrel = relocs;
   relend = relocs + input_section->reloc_count;
   for (; rel < relend; wrel++, rel++)
     {
       unsigned int r_type, r_type_tls;
+      struct reloc_howto_struct howto_modified;
       reloc_howto_type *howto;
       unsigned long r_symndx;
       struct elf_link_hash_entry *h;
@@ -2207,11 +2258,30 @@ elf_i386_relocate_section (bfd *output_bfd,
 	      >= R_386_ext - R_386_standard)
 	  && ((indx = r_type - R_386_tls_offset) - R_386_ext
 	      >= R_386_ext2 - R_386_ext)
-	  && ((indx = r_type - R_386_ia16_offset) - R_386_ext2
-	      >= R_386_ext3 - R_386_ext2))
+	  && ((indx = r_type - R_386_ia16_new_offset) - R_386_ext2
+	      >= R_386_ext3 - R_386_ext2)
+	  && ((indx = r_type - R_386_ia16_old_offset) - R_386_ext3
+	      >= R_386_ext4 - R_386_ext3))
 	return _bfd_unrecognized_reloc (input_bfd, input_section, r_type);
 
       howto = elf_howto_table + indx;
+
+      /* Ignore R_386_16 and R_386_SUB16 relocation overflow when there
+	 are R_386_16 and R_386_SUB16 relocations applied to the same
+	 offset.  */
+      if (ignore_reloc_overflow
+	  || (r_type == R_386_16
+	      && (rel + 1) < relend
+	      && rel->r_offset == rel[1].r_offset
+	      && ELF32_R_TYPE (rel[1].r_info) == R_386_SUB16))
+	{
+	  ignore_reloc_overflow = !ignore_reloc_overflow;
+	  /* Use complain_overflow_dont if relocation overflow should be
+	     ignored.  */
+	  howto_modified = *howto;
+	  howto_modified.complain_on_overflow = complain_overflow_dont;
+	  howto = &howto_modified;
+	}
 
       r_symndx = ELF32_R_SYM (rel->r_info);
       h = NULL;
@@ -3535,6 +3605,18 @@ disallow_got32:
 	    relocation = elf_i386_tpoff (info, relocation);
 	  else
 	    relocation = -elf_i386_tpoff (info, relocation);
+	  break;
+
+	/* NB: Multiple relocations for the same offset are handled
+	   automatically since i386 uses REL, not RELA relocation.
+	   The previous relocation result becomes the addend for the
+	   current relocation.  */
+	case R_386_SEG16X:
+	  break;
+
+	case R_386_SUB16:
+	case R_386_SUB32:
+	  relocation = -relocation;
 	  break;
 
 	default:
