@@ -29,6 +29,14 @@
 
 #include "elf/i386.h"
 
+static bfd_reloc_status_type bfd_i386_elf_sub16_reloc (bfd *, arelent *,
+						       asymbol *, void *,
+						       asection *, bfd *,
+						       char **);
+static bfd_reloc_status_type bfd_i386_elf_sub32_reloc (bfd *, arelent *,
+						       asymbol *, void *,
+						       asection *, bfd *,
+						       char **);
 static bfd_reloc_status_type bfd_i386_elf_segment16_reloc (bfd *, arelent *,
 							   asymbol *, void *,
 							   asection *, bfd *,
@@ -157,15 +165,17 @@ static reloc_howto_type elf_howto_table[]=
 #define R_386_ext2 (R_386_GOT32X + 1 - R_386_tls_offset)
 #define R_386_ia16_new_offset (R_386_SEG16X - R_386_ext2)
 
-  /* Newer, experimental IA16 relocations.  */
+  /* Newer, experimental IA16 relocations.  Special routines are needed for
+     R_386_SUB{16, 32}, especially when outputting a non-ELF file --- in that
+     case, the relocations will not go via elf_i386_relocate_section (...).  */
   HOWTO(R_386_SEG16X, 4, 1, 16, FALSE, 0, complain_overflow_unsigned,
 	bfd_elf_generic_reloc, "R_386_SEG16X",
 	TRUE, 0xffff, 0xffff, FALSE),
   HOWTO(R_386_SUB16, 0, 1, 16, FALSE, 0, complain_overflow_bitfield,
-	bfd_elf_generic_reloc, "R_386_SUB16",
+	bfd_i386_elf_sub16_reloc, "R_386_SUB16",
 	TRUE, 0xffff, 0xffff, FALSE),
   HOWTO(R_386_SUB32, 0, 2, 32, FALSE, 0, complain_overflow_bitfield,
-	bfd_elf_generic_reloc, "R_386_SUB32",
+	bfd_i386_elf_sub32_reloc, "R_386_SUB32",
 	TRUE, 0xffffffff, 0xffffffff, FALSE),
 
   /* Yet another gap.  */
@@ -222,8 +232,74 @@ static reloc_howto_type elf_howto_table[]=
 
 #define X86_SIZE_TYPE_P(TYPE) ((TYPE) == R_386_SIZE32)
 
+/* Either install or perform an R_386_SUB16 relocation (experimental).  */
+static bfd_reloc_status_type
+bfd_i386_elf_sub16_reloc (bfd *abfd, arelent *reloc_entry, asymbol *symbol,
+			  void *data ATTRIBUTE_UNUSED,
+			  asection *input_section, bfd *output_bfd,
+			  char **error_message ATTRIBUTE_UNUSED)
+{
+  bfd_vma value;
+  asection *sec;
+  struct reloc_howto_struct howto_modified;
+
+  if (output_bfd)
+    {
+      reloc_entry->address += input_section->output_offset;
+      return bfd_reloc_ok;
+    }
+
+  if (reloc_entry->address > bfd_get_section_limit (abfd, input_section))
+    return bfd_reloc_outofrange;
+
+  sec = symbol->section;
+  if (bfd_is_abs_section (sec))
+    value = symbol->value;
+  else
+    value = sec->output_section->vma + sec->output_offset + symbol->value;
+  value += reloc_entry->addend;
+  value = -value;
+
+  howto_modified = elf_howto_table[R_386_16 - R_386_ext_offset];
+  howto_modified.complain_on_overflow = complain_overflow_dont;
+  return _bfd_relocate_contents (&howto_modified, abfd, value,
+				 (bfd_byte *) data + reloc_entry->address);
+}
+
+/* Either install or perform an R_386_SUB32 relocation (experimental).  */
+static bfd_reloc_status_type
+bfd_i386_elf_sub32_reloc (bfd *abfd, arelent *reloc_entry, asymbol *symbol,
+			  void *data ATTRIBUTE_UNUSED,
+			  asection *input_section, bfd *output_bfd,
+			  char **error_message ATTRIBUTE_UNUSED)
+{
+  bfd_vma value;
+  asection *sec;
+
+  if (output_bfd)
+    {
+      reloc_entry->address += input_section->output_offset;
+      return bfd_reloc_ok;
+    }
+
+  if (reloc_entry->address > bfd_get_section_limit (abfd, input_section))
+    return bfd_reloc_outofrange;
+
+  sec = symbol->section;
+  if (bfd_is_abs_section (sec))
+    value = symbol->value;
+  else
+    value = sec->output_section->vma + sec->output_offset + symbol->value;
+  value += reloc_entry->addend;
+  value = -value;
+
+  return _bfd_relocate_contents (&elf_howto_table[R_386_32], abfd, value,
+				 (bfd_byte *) data + reloc_entry->address);
+}
+
 /* This function, bfd_i386_elf_segment16_reloc (...), and bfd_i386_elf_
-   relseg16_reloc (...), are intended to support MS-DOS MZ relocations for
+   relseg16_reloc (...), are intended to support the R_386_SEGMENT16 and
+   R_386_RELSEG16 relocations for implementing MS-DOS MZ relocations for
    the 16-bit Intel 8086 (ia16-elf).
 
    In the newlib-ia16 linker script, IA-16 segments are represented as
