@@ -2897,14 +2897,7 @@ disallow_got32:
 	  unresolved_reloc = FALSE;
 	  break;
 
-	case R_386_SEGMENT16:
-	  _bfd_error_handler
-	    /* xgettext:c-format */
-	    (_("%B: stray R_386_SEGMENT16 relocation in section `%A'"),
-	     input_bfd, input_section);
-	  bfd_set_error (bfd_error_bad_value);
-	  return FALSE;
-
+	case R_386_SEGMENT16:	/* see bfd_i386_elf_segment16_reloc above */
 	case R_386_RELSEG16:
 	  if (! bfd_i386_elf_get_paragraph_distance (sec, &relocation))
 	    {
