@@ -249,7 +249,9 @@ bfd_i386_elf_sub16_reloc (bfd *abfd, arelent *reloc_entry, asymbol *symbol,
       return bfd_reloc_ok;
     }
 
-  if (reloc_entry->address > bfd_get_section_limit (abfd, input_section))
+  if (reloc_entry->address + 2 < (bfd_vma) 2
+      || reloc_entry->address + 2
+	 > bfd_get_section_limit (abfd, input_section))
     return bfd_reloc_outofrange;
 
   sec = symbol->section;
@@ -289,7 +291,9 @@ bfd_i386_elf_sub32_reloc (bfd *abfd, arelent *reloc_entry, asymbol *symbol,
       return bfd_reloc_ok;
     }
 
-  if (reloc_entry->address > bfd_get_section_limit (abfd, input_section))
+  if (reloc_entry->address + 4 < (bfd_vma) 4
+      || reloc_entry->address + 4
+	 > bfd_get_section_limit (abfd, input_section))
     return bfd_reloc_outofrange;
 
   sec = symbol->section;
@@ -406,7 +410,9 @@ bfd_i386_elf_relseg16_reloc (bfd *abfd, arelent *reloc_entry, asymbol *symbol,
       return bfd_reloc_ok;
     }
 
-  if (reloc_entry->address > bfd_get_section_limit (abfd, input_section))
+  if (reloc_entry->address + 2 < (bfd_vma) 2
+      || reloc_entry->address + 2
+	 > bfd_get_section_limit (abfd, input_section))
     return bfd_reloc_outofrange;
 
   if (! bfd_i386_elf_get_paragraph_distance (symbol->section, &paras))
