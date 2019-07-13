@@ -94,6 +94,12 @@ enum
   // IA16 extension (old).
   R_386_SEGMENT16 = 80,     // High 16 bits, adds to exe relocation table
   R_386_RELSEG16 = 81,      // High 16 bits, do not add to exe relocation table
+  // IA16 extension (old experimental).
+  R_386_OZSUB16 = 82,       // Subtract "flat address" (load address relative
+  R_386_OZSUB32 = 83,       // to some reasonable base) of offset 0 of symbol's
+                            // section
+  R_386_OZ16 = 84,          // "Flat address" of offset 0 of symbol's section
+  R_386_OZ32 = 85,
   // Used by Intel.
   R_386_USED_BY_INTEL_200 = 200,
   // GNU vtable garbage collection extensions.

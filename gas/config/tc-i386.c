@@ -3277,8 +3277,15 @@ tc_i386_fix_adjustable (fixS *fixP ATTRIBUTE_UNUSED)
       || fixP->fx_r_type == BFD_RELOC_386_TLS_LE
       || fixP->fx_r_type == BFD_RELOC_386_TLS_GOTDESC
       || fixP->fx_r_type == BFD_RELOC_386_TLS_DESC_CALL
+      || fixP->fx_r_type == BFD_RELOC_386_SEG16X
+      || fixP->fx_r_type == BFD_RELOC_386_SUB16
+      || fixP->fx_r_type == BFD_RELOC_386_SUB32
       || fixP->fx_r_type == BFD_RELOC_386_SEGMENT16
       || fixP->fx_r_type == BFD_RELOC_386_RELSEG16
+      || fixP->fx_r_type == BFD_RELOC_386_OZSUB16
+      || fixP->fx_r_type == BFD_RELOC_386_OZSUB32
+      || fixP->fx_r_type == BFD_RELOC_386_OZ16
+      || fixP->fx_r_type == BFD_RELOC_386_OZ32
       || fixP->fx_r_type == BFD_RELOC_X86_64_PLT32
       || fixP->fx_r_type == BFD_RELOC_X86_64_GOT32
       || fixP->fx_r_type == BFD_RELOC_X86_64_GOTPCREL
@@ -8702,6 +8709,18 @@ lex_got (enum bfd_reloc_code_real *rel,
     { STRING_COMMA_LEN ("RELSEG16"), { BFD_RELOC_386_RELSEG16,
 				       _dummy_first_bfd_reloc_code_real },
       OPERAND_TYPE_NONE },
+    { STRING_COMMA_LEN ("OZSUB16"),  { BFD_RELOC_386_OZSUB16,
+				       _dummy_first_bfd_reloc_code_real },
+      OPERAND_TYPE_NONE },
+    { STRING_COMMA_LEN ("OZSUB32"),  { BFD_RELOC_386_OZSUB32,
+				       _dummy_first_bfd_reloc_code_real },
+      OPERAND_TYPE_NONE },
+    { STRING_COMMA_LEN ("OZ16"),     { BFD_RELOC_386_OZ16,
+				       _dummy_first_bfd_reloc_code_real },
+      OPERAND_TYPE_NONE },
+    { STRING_COMMA_LEN ("OZ32"),     { BFD_RELOC_386_OZ32,
+				       _dummy_first_bfd_reloc_code_real },
+      OPERAND_TYPE_NONE },
   };
   char *cp;
   unsigned int j;
@@ -8746,7 +8765,15 @@ lex_got (enum bfd_reloc_code_real *rel,
 		}
 
 	      if (r != BFD_RELOC_SIZE32
+		  && r != BFD_RELOC_386_SEG16X
+		  && r != BFD_RELOC_386_SUB16
+		  && r != BFD_RELOC_386_SUB32
+		  && r != BFD_RELOC_386_SEGMENT16
 		  && r != BFD_RELOC_386_RELSEG16
+		  && r != BFD_RELOC_386_OZSUB16
+		  && r != BFD_RELOC_386_OZSUB32
+		  && r != BFD_RELOC_386_OZ16
+		  && r != BFD_RELOC_386_OZ32
 		  && GOT_symbol == NULL)
 		GOT_symbol = symbol_find_or_make (GLOBAL_OFFSET_TABLE_NAME);
 
@@ -11874,8 +11901,15 @@ tc_gen_reloc (asection *section ATTRIBUTE_UNUSED, fixS *fixp)
     case BFD_RELOC_386_TLS_LE:
     case BFD_RELOC_386_TLS_GOTDESC:
     case BFD_RELOC_386_TLS_DESC_CALL:
+    case BFD_RELOC_386_SEG16X:
+    case BFD_RELOC_386_SUB16:
+    case BFD_RELOC_386_SUB32:
     case BFD_RELOC_386_SEGMENT16:
     case BFD_RELOC_386_RELSEG16:
+    case BFD_RELOC_386_OZSUB16:
+    case BFD_RELOC_386_OZSUB32:
+    case BFD_RELOC_386_OZ16:
+    case BFD_RELOC_386_OZ32:
     case BFD_RELOC_X86_64_TLSGD:
     case BFD_RELOC_X86_64_TLSLD:
     case BFD_RELOC_X86_64_DTPOFF32:
