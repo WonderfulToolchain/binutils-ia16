@@ -345,24 +345,35 @@ no output section"), output_bfd);
    compute the paragraph distance of a section's segment (from the program's
    base), we can subtract the section's VMA from its LMA.
 
-   If the MZ header has its own section, also subtract the LMA for the end
-   of the header.  -- tkchia  */
+   If the MZ header (or whatever executable header is in use) has its own
+   section, also subtract the LMA for the end of the header.  For now,
+   recognize the section names .ia16.hdr, .msdos_mz_hdr, and .hdr, in that
+   order.  (The last two are for compatibility with existing linker
+   scripts.)  -- tkchia */
 static bfd_boolean
 bfd_i386_elf_get_true_load_begin (bfd *output_bfd, bfd_vma *begin)
 {
-  asection *hdr_sec = bfd_get_section_by_name (output_bfd, ".msdos_mz_hdr");
+  asection *hdr_sec = bfd_get_section_by_name (output_bfd, ".ia16.hdr");
 
   if (! hdr_sec)
     {
-      *begin = 0;
-      return TRUE;
+      hdr_sec = bfd_get_section_by_name (output_bfd, ".msdos_mz_hdr");
+      if (! hdr_sec)
+	{
+	  hdr_sec = bfd_get_section_by_name (output_bfd, ".hdr");
+	  if (! hdr_sec)
+	    {
+	      *begin = 0;
+	      return TRUE;
+	    }
+	}
     }
 
   if (hdr_sec->lma % 16 != 0 || hdr_sec->size % 16 != 0)
     {
       /* xgettext:c-format */
-      _bfd_error_handler (_("%pB: IA-16 relocation with unaligned MZ header"),
-			  output_bfd);
+      _bfd_error_handler (_("%pB: IA-16 relocation with unaligned output \
+file header"), output_bfd);
       return FALSE;
     }
 
