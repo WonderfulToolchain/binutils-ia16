@@ -374,6 +374,7 @@ bfd_i386_elf_get_true_load_begin (bfd *output_bfd, bfd_vma *begin)
       /* xgettext:c-format */
       _bfd_error_handler (_("%pB: IA-16 relocation with unaligned output \
 file header"), output_bfd);
+      bfd_set_error (bfd_error_bad_value);
       return FALSE;
     }
 
@@ -394,6 +395,7 @@ bfd_i386_elf_get_paragraph_distance (asection *input_section,
       /* xgettext:c-format */
       _bfd_error_handler (_("R_386_SEGMENT16 or R_386_RELSEG16 for \
 symbol with no output section"));
+      bfd_set_error (bfd_error_bad_value);
       return FALSE;
     }
 
@@ -407,6 +409,7 @@ symbol with no output section"));
       /* xgettext:c-format */
       _bfd_error_handler (_("%pB: R_386_SEGMENT16 or R_386_RELSEG16 with \
 unaligned section `%pA'"), output_bfd, output_section);
+      bfd_set_error (bfd_error_bad_value);
       return FALSE;
     }
 
@@ -416,6 +419,21 @@ unaligned section `%pA'"), output_bfd, output_section);
   dist -= begin / 16;
   *distance = dist;
   return TRUE;
+}
+
+/* Warn about suspicious non-zero addends inside relocation entries (but
+   arrange to add them anyway...).  */
+static bfd_vma
+bfd_i386_warn_nonzero_addend (arelent *reloc_entry, bfd *abfd)
+{
+  bfd_vma addend = reloc_entry->addend;
+
+  if (addend)
+    /* xgettext:c-format */
+    _bfd_error_handler (_("%pB: warning: suspicious %s relocation with \
+non-zero addend"), abfd, reloc_entry->howto->name);
+
+  return addend;
 }
 
 /* Either install or perform an R_386_SEGMENT16 relocation.
@@ -459,6 +477,8 @@ bfd_i386_elf_relseg16_reloc (bfd *abfd, arelent *reloc_entry, asymbol *symbol,
 
   if (! bfd_i386_elf_get_paragraph_distance (symbol->section, &paras))
     return bfd_reloc_other;
+
+  paras += bfd_i386_warn_nonzero_addend (reloc_entry, abfd);
 
   return _bfd_relocate_contents (&elf_howto_table[R_386_16 - R_386_ext_offset],
     abfd, paras, (bfd_byte *) data + reloc_entry->address);
@@ -504,10 +524,11 @@ no output section"), output_bfd);
 	return bfd_reloc_other;
       value = sec->lma - sec->vma - begin;
     }
-  value += reloc_entry->addend;
 
   if (reloc_entry->howto->type == R_386_OZSUB16)
     value = -value;
+
+  value += bfd_i386_warn_nonzero_addend (reloc_entry, abfd);
 
   howto_modified = elf_howto_table[R_386_16 - R_386_ext_offset];
   howto_modified.complain_on_overflow = complain_overflow_dont;
@@ -539,7 +560,7 @@ bfd_i386_elf_ozxx32_reloc (bfd *abfd, arelent *reloc_entry, asymbol *symbol,
 
   sec = symbol->section;
   if (bfd_is_abs_section (sec))
-    value = symbol->value;
+    value = 0;
   else if (bfd_is_const_section (sec) || ! sec->output_section)
     {
       /* xgettext:c-format */
@@ -554,10 +575,11 @@ no output section"), output_bfd);
 	return bfd_reloc_other;
       value = sec->lma - sec->vma - begin;
     }
-  value += reloc_entry->addend;
 
   if (reloc_entry->howto->type == R_386_OZSUB32)
     value = -value;
+
+  value += bfd_i386_warn_nonzero_addend (reloc_entry, abfd);
 
   return _bfd_relocate_contents (&elf_howto_table[R_386_32], abfd, value,
 				 (bfd_byte *) data + reloc_entry->address);
