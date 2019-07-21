@@ -88,6 +88,17 @@ AC_ARG_ENABLE(x86_relax_relocations,
   no)  ac_default_x86_relax_relocations=0 ;;
 esac])dnl
 
+# Decide if x86 assembler should adjust x86 relocations with respect to output
+# section bases.
+ac_default_x86_wrt_oz_relocations=0
+AC_ARG_ENABLE(x86_wrt_oz_relocations,
+	      AS_HELP_STRING([--enable-x86-wrt-oz-relocations],
+	      [adjust x86 relocations wrt section bases]),
+[case "${enableval}" in
+  yes)  ac_default_x86_relax_relocations=1 ;;
+  no)   ac_default_x86_relax_relocations=0 ;;
+esac])dnl
+
 # Decide if ELF assembler should generate common symbols with the
 # STT_COMMON type.
 ac_default_elf_stt_common=unset
@@ -641,6 +652,14 @@ fi
 AC_DEFINE_UNQUOTED(DEFAULT_GENERATE_X86_RELAX_RELOCATIONS,
   $ac_default_x86_relax_relocations,
   [Define to 1 if you want to generate x86 relax relocations by default.])
+
+if test ${ac_default_x86_wrt_oz_relocations} = unset; then
+  ac_default_x86_wrt_oz_relocations=0
+fi
+AC_DEFINE_UNQUOTED(DEFAULT_GENERATE_X86_WRT_OZ_RELOCATIONS,
+  $ac_default_x86_wrt_oz_relocations,
+  [Define to 1 if you want to adjust x86 relocations wrt section bases
+   by default.])
 
 if test ${ac_default_elf_stt_common} = unset; then
   ac_default_elf_stt_common=0

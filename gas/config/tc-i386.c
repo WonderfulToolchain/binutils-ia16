@@ -610,6 +610,12 @@ static int avoid_fence = 0;
 static int generate_relax_relocations
   = DEFAULT_GENERATE_X86_RELAX_RELOCATIONS;
 
+/* 1 if the assembler should adjust x86 relocations with respect to section
+   bases.  */
+
+static int generate_wrt_oz_relocations
+  = DEFAULT_GENERATE_X86_WRT_OZ_RELOCATIONS;
+
 static enum check_kind
   {
     check_none = 0,
@@ -7732,6 +7738,54 @@ need_plt32_p (symbolS *s)
 }
 #endif
 
+static fixS *
+x86_fix_new_exp_wrt (fragS *frag, unsigned int off, unsigned int len,
+		     expressionS *exp, int pcrel, bfd_reloc_code_real_type r)
+{
+  if (! object_64bit)
+    {
+      switch (r)
+	{
+	case BFD_RELOC_8:
+	  as_warn (_("adjusting R_386_8 wrt section base not supported"));
+	  break;
+	case BFD_RELOC_16:
+	  fix_new_exp (frag, off, len, exp, 0, BFD_RELOC_386_OZSUB16);
+	  break;
+	case BFD_RELOC_32:
+	  fix_new_exp (frag, off, len, exp, 0, BFD_RELOC_386_OZSUB32);
+	  break;
+	case BFD_RELOC_8_PCREL:
+	  /* For now, just assume that no adjustment is needed... */
+	  break;
+	case BFD_RELOC_16_PCREL:
+	  {
+	    expressionS seg;
+	    seg.X_op = O_symbol;
+	    seg.X_add_symbol = section_symbol (now_seg);
+	    seg.X_add_number = 0;
+	    fix_new_exp (frag, off, len, &seg, 0, BFD_RELOC_386_OZ16);
+	    fix_new_exp (frag, off, len, exp, 0, BFD_RELOC_386_OZSUB16);
+	  }
+	  break;
+	case BFD_RELOC_32_PCREL:
+	  {
+	    expressionS seg;
+	    seg.X_op = O_symbol;
+	    seg.X_add_symbol = section_symbol (now_seg);
+	    seg.X_add_number = 0;
+	    fix_new_exp (frag, off, len, &seg, 0, BFD_RELOC_386_OZ32);
+	    fix_new_exp (frag, off, len, exp, 0, BFD_RELOC_386_OZSUB32);
+	  }
+	  break;
+	default:
+	  break;
+	}
+    }
+
+  return fix_new_exp (frag, off, len, exp, pcrel, r);
+}
+
 static void
 output_jump (void)
 {
@@ -7815,8 +7869,8 @@ output_jump (void)
 
   jump_reloc = reloc (size, 1, 1, jump_reloc);
 
-  fixP = fix_new_exp (frag_now, p - frag_now->fr_literal, size,
-		      i.op[0].disps, 1, jump_reloc);
+  fixP = x86_fix_new_exp_wrt (frag_now, p - frag_now->fr_literal, size,
+			      i.op[0].disps, 1, jump_reloc);
 
   /* All jumps handled here are signed, but don't use a signed limit
      check for 32 and 16 bit jumps as we want to allow wrap around at
@@ -7881,8 +7935,8 @@ output_interseg_jump (void)
       md_number_to_chars (p, n, size);
     }
   else
-    fix_new_exp (frag_now, p - frag_now->fr_literal, size,
-		 i.op[1].imms, 0, reloc (size, 0, 0, i.reloc[1]));
+    x86_fix_new_exp_wrt (frag_now, p - frag_now->fr_literal, size,
+			 i.op[1].imms, 0, reloc (size, 0, 0, i.reloc[1]));
   if (i.op[0].imms->X_op != O_constant)
     as_bad (_("can't handle non absolute segment in `%s'"),
 	    i.tm.name);
@@ -8421,9 +8475,9 @@ output_disp (fragS *insn_start_frag, offsetT insn_start_off)
 		       insn, and that is taken care of in other code.  */
 		    reloc_type = BFD_RELOC_X86_64_GOTPC32;
 		}
-	      fixP = fix_new_exp (frag_now, p - frag_now->fr_literal,
-				  size, i.op[n].disps, pcrel,
-				  reloc_type);
+	      fixP = x86_fix_new_exp_wrt (frag_now, p - frag_now->fr_literal,
+					  size, i.op[n].disps, pcrel,
+					  reloc_type);
 	      /* Check for "call/jmp *mem", "mov mem, %reg",
 		 "test %reg, mem" and "binop mem, %reg" where binop
 		 is one of adc, add, and, cmp, or, sbb, sub, xor
@@ -8579,8 +8633,8 @@ output_imm (fragS *insn_start_frag, offsetT insn_start_off)
 		    reloc_type = BFD_RELOC_X86_64_GOTPC64;
 		  i.op[n].imms->X_add_number += add;
 		}
-	      fix_new_exp (frag_now, p - frag_now->fr_literal, size,
-			   i.op[n].imms, 0, reloc_type);
+	      x86_fix_new_exp_wrt (frag_now, p - frag_now->fr_literal, size,
+				   i.op[n].imms, 0, reloc_type);
 	    }
 	}
     }
@@ -8604,7 +8658,7 @@ x86_cons_fix_new (fragS *frag, unsigned int off, unsigned int len,
     }
 #endif
 
-  fix_new_exp (frag, off, len, exp, 0, r);
+  x86_fix_new_exp_wrt (frag, off, len, exp, 0, r);
 }
 
 /* Export the ABI address size for use by TC_ADDRESS_BYTES for the
@@ -10931,6 +10985,7 @@ const char *md_shortopts = "qnO::";
 #define OPTION_MFENCE_AS_LOCK_ADD (OPTION_MD_BASE + 24)
 #define OPTION_X86_USED_NOTE (OPTION_MD_BASE + 25)
 #define OPTION_MVEXWIG (OPTION_MD_BASE + 26)
+#define OPTION_MWRT_OZ_RELOCATIONS (OPTION_MD_BASE + 27)
 
 struct option md_longopts[] =
 {
@@ -10968,6 +11023,7 @@ struct option md_longopts[] =
   {"mevexrcig", required_argument, NULL, OPTION_MEVEXRCIG},
   {"mamd64", no_argument, NULL, OPTION_MAMD64},
   {"mintel64", no_argument, NULL, OPTION_MINTEL64},
+  {"mwrt-oz-relocations", required_argument, NULL, OPTION_MWRT_OZ_RELOCATIONS},
   {NULL, no_argument, NULL, 0}
 };
 size_t md_longopts_size = sizeof (md_longopts);
@@ -11350,6 +11406,15 @@ md_parse_option (int c, const char *arg)
         generate_relax_relocations = 0;
       else
         as_fatal (_("invalid -mrelax-relocations= option: `%s'"), arg);
+      break;
+
+    case OPTION_MWRT_OZ_RELOCATIONS:
+      if (strcasecmp (arg, "yes") == 0)
+        generate_wrt_oz_relocations = 1;
+      else if (strcasecmp (arg, "no") == 0)
+        generate_wrt_oz_relocations = 0;
+      else
+        as_fatal (_("invalid -mwrt-oz-relocations= option: `%s'"), arg);
       break;
 
     case OPTION_MAMD64:
