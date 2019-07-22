@@ -7742,6 +7742,11 @@ static fixS *
 x86_fix_new_exp_wrt (fragS *frag, unsigned int off, unsigned int len,
 		     expressionS *exp, int pcrel, bfd_reloc_code_real_type r)
 {
+  valueT xval;
+  segT xseg;
+  fragS *xfrag;
+  symbolS *sym;
+
   if (! object_64bit)
     {
       switch (r)
@@ -7759,24 +7764,36 @@ x86_fix_new_exp_wrt (fragS *frag, unsigned int off, unsigned int len,
 	  /* For now, just assume that no adjustment is needed... */
 	  break;
 	case BFD_RELOC_16_PCREL:
-	  {
-	    expressionS seg;
-	    seg.X_op = O_symbol;
-	    seg.X_add_symbol = section_symbol (now_seg);
-	    seg.X_add_number = 0;
-	    fix_new_exp (frag, off, len, &seg, 0, BFD_RELOC_386_OZ16);
-	    fix_new_exp (frag, off, len, exp, 0, BFD_RELOC_386_OZSUB16);
-	  }
+	  /* There is no need to add adjustments if both the place to fix up
+	     and the symbol are known to be in the same segment.  */
+	  sym = exp->X_add_symbol;
+	  if (exp->X_op != O_symbol
+	      || ! snapshot_symbol (&sym, &xval, &xseg, &xfrag)
+	      || xseg != now_seg)
+	    {
+	      expressionS now_seg_expr;
+	      now_seg_expr.X_op = O_symbol;
+	      now_seg_expr.X_add_symbol = section_symbol (now_seg);
+	      now_seg_expr.X_add_number = 0;
+	      fix_new_exp (frag, off, len, &now_seg_expr, 0,
+			   BFD_RELOC_386_OZ16);
+	      fix_new_exp (frag, off, len, exp, 0, BFD_RELOC_386_OZSUB16);
+	    }
 	  break;
 	case BFD_RELOC_32_PCREL:
-	  {
-	    expressionS seg;
-	    seg.X_op = O_symbol;
-	    seg.X_add_symbol = section_symbol (now_seg);
-	    seg.X_add_number = 0;
-	    fix_new_exp (frag, off, len, &seg, 0, BFD_RELOC_386_OZ32);
-	    fix_new_exp (frag, off, len, exp, 0, BFD_RELOC_386_OZSUB32);
-	  }
+	  sym = exp->X_add_symbol;
+	  if (exp->X_op != O_symbol
+	      || ! snapshot_symbol (&sym, &xval, &xseg, &xfrag)
+	      || xseg != now_seg)
+	    {
+	      expressionS now_seg_expr;
+	      now_seg_expr.X_op = O_symbol;
+	      now_seg_expr.X_add_symbol = section_symbol (now_seg);
+	      now_seg_expr.X_add_number = 0;
+	      fix_new_exp (frag, off, len, &now_seg_expr, 0,
+			   BFD_RELOC_386_OZ32);
+	      fix_new_exp (frag, off, len, exp, 0, BFD_RELOC_386_OZSUB32);
+	    }
 	  break;
 	default:
 	  break;
