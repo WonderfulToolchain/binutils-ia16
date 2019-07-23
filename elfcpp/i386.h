@@ -100,6 +100,8 @@ enum
                             // section
   R_386_OZ16 = 84,          // "Flat address" of offset 0 of symbol's section
   R_386_OZ32 = 85,
+  R_386_OZSUB8 = 86,
+  R_386_OZ8 = 87,
   // Used by Intel.
   R_386_USED_BY_INTEL_200 = 200,
   // GNU vtable garbage collection extensions.

@@ -45,6 +45,10 @@ static bfd_reloc_status_type bfd_i386_elf_relseg16_reloc (bfd *, arelent *,
 							  asymbol *, void *,
 							  asection *, bfd *,
 							  char **);
+static bfd_reloc_status_type bfd_i386_elf_ozxx8_reloc (bfd *, arelent *,
+						       asymbol *, void *,
+						       asection *, bfd *,
+						       char **);
 static bfd_reloc_status_type bfd_i386_elf_ozxx16_reloc (bfd *, arelent *,
 							asymbol *, void *,
 							asection *, bfd *,
@@ -209,9 +213,15 @@ static reloc_howto_type elf_howto_table[]=
   HOWTO(R_386_OZ32, 0, 2, 32, FALSE, 0, complain_overflow_bitfield,
 	bfd_i386_elf_ozxx32_reloc, "R_386_OZ32",
 	TRUE, 0xffffffff, 0xffffffff, FALSE),
+  HOWTO(R_386_OZSUB8, 0, 0, 8, FALSE, 0, complain_overflow_dont,
+	bfd_i386_elf_ozxx8_reloc, "R_386_OZSUB8",
+	TRUE, 0xff, 0xff, FALSE),
+  HOWTO(R_386_OZ8, 0, 0, 8, FALSE, 0, complain_overflow_dont,
+	bfd_i386_elf_ozxx8_reloc, "R_386_OZ8",
+	TRUE, 0xff, 0xff, FALSE),
 
   /* And another gap.  */
-#define R_386_ext4 (R_386_OZ32 + 1 - R_386_ia16_old_offset)
+#define R_386_ext4 (R_386_OZ8 + 1 - R_386_ia16_old_offset)
 #define R_386_vt_offset (R_386_GNU_VTINHERIT - R_386_ext4)
 
 /* GNU extension to record C++ vtable hierarchy.  */
@@ -482,6 +492,56 @@ bfd_i386_elf_relseg16_reloc (bfd *abfd, arelent *reloc_entry, asymbol *symbol,
 
   return _bfd_relocate_contents (&elf_howto_table[R_386_16 - R_386_ext_offset],
     abfd, paras, (bfd_byte *) data + reloc_entry->address);
+}
+
+/* Either install or perform an R_386_OZSUB8 or R_386_OZ8 relocation
+   (experimental).  */
+static bfd_reloc_status_type
+bfd_i386_elf_ozxx8_reloc (bfd *abfd, arelent *reloc_entry, asymbol *symbol,
+			  void *data ATTRIBUTE_UNUSED,
+			  asection *input_section, bfd *output_bfd,
+			  char **error_message ATTRIBUTE_UNUSED)
+{
+  bfd_vma value, begin;
+  asection *sec;
+  struct reloc_howto_struct howto_modified;
+
+  if (output_bfd)
+    {
+      reloc_entry->address += input_section->output_offset;
+      return bfd_reloc_ok;
+    }
+
+  if (reloc_entry->address >= bfd_get_section_limit (abfd, input_section))
+    return bfd_reloc_outofrange;
+
+  sec = symbol->section;
+  if (bfd_is_abs_section (sec))
+    value = 0;
+  else if (bfd_is_const_section (sec) || ! sec->output_section)
+    {
+      /* xgettext:c-format */
+      _bfd_error_handler (_("%pB: R_386_OZSUB8 or R_386_OZ8 for symbol with \
+no output section"), output_bfd);
+      return bfd_reloc_undefined;
+    }
+  else
+    {
+      sec = sec->output_section;
+      if (! bfd_i386_elf_get_true_load_begin (sec->owner, &begin))
+	return bfd_reloc_other;
+      value = sec->lma - sec->vma - begin;
+    }
+
+  if (reloc_entry->howto->type == R_386_OZSUB8)
+    value = -value;
+
+  value += bfd_i386_warn_nonzero_addend (reloc_entry, abfd);
+
+  howto_modified = elf_howto_table[R_386_8 - R_386_ext_offset];
+  howto_modified.complain_on_overflow = complain_overflow_dont;
+  return _bfd_relocate_contents (&howto_modified, abfd, value,
+				 (bfd_byte *) data + reloc_entry->address);
 }
 
 /* Either install or perform an R_386_OZSUB16 or R_386_OZ16 relocation
@@ -771,6 +831,14 @@ elf_i386_reloc_type_lookup (bfd *abfd,
     case BFD_RELOC_386_OZ32:
       TRACE ("BFD_RELOC_386_OZ32");
       return &elf_howto_table[R_386_OZ32 - R_386_ia16_old_offset];
+
+    case BFD_RELOC_386_OZSUB8:
+      TRACE ("BFD_RELOC_386_OZSUB8");
+      return &elf_howto_table[R_386_OZSUB8 - R_386_ia16_old_offset];
+
+    case BFD_RELOC_386_OZ8:
+      TRACE ("BFD_RELOC_386_OZ8");
+      return &elf_howto_table[R_386_OZ8 - R_386_ia16_old_offset];
 
     case BFD_RELOC_VTABLE_INHERIT:
       TRACE ("BFD_RELOC_VTABLE_INHERIT");
@@ -2362,6 +2430,8 @@ do_size:
 	case R_386_OZSUB32:
 	case R_386_OZ16:
 	case R_386_OZ32:
+	case R_386_OZSUB8:
+	case R_386_OZ8:
 	  if (bfd_link_dll (info))
 	    {
 	      reloc_howto_type *howto
@@ -3203,6 +3273,8 @@ disallow_got32:
 	case R_386_OZSUB32:
 	case R_386_OZ16:
 	case R_386_OZ32:
+	case R_386_OZSUB8:
+	case R_386_OZ8:
 	  if (bfd_is_abs_section (sec))
 	    relocation = 0;
 	  else
@@ -3219,7 +3291,8 @@ disallow_got32:
 	      relocation = sec->output_section->lma - sec->output_section->vma
 			   - begin;
 
-	      if (r_type == R_386_OZSUB16 || r_type == R_386_OZSUB32)
+	      if (r_type == R_386_OZSUB16 || r_type == R_386_OZSUB32
+		  || r_type == R_386_OZSUB8)
 		relocation = -relocation;
 	    }
 	  unresolved_reloc = FALSE;

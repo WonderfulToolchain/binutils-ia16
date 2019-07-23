@@ -7752,7 +7752,7 @@ x86_fix_new_exp_wrt (fragS *frag, unsigned int off, unsigned int len,
       switch (r)
 	{
 	case BFD_RELOC_8:
-	  as_warn (_("adjusting R_386_8 wrt section base not supported"));
+	  fix_new_exp (frag, off, len, exp, 0, BFD_RELOC_386_OZSUB8);
 	  break;
 	case BFD_RELOC_16:
 	  fix_new_exp (frag, off, len, exp, 0, BFD_RELOC_386_OZSUB16);
@@ -7761,11 +7761,23 @@ x86_fix_new_exp_wrt (fragS *frag, unsigned int off, unsigned int len,
 	  fix_new_exp (frag, off, len, exp, 0, BFD_RELOC_386_OZSUB32);
 	  break;
 	case BFD_RELOC_8_PCREL:
-	  /* For now, just assume that no adjustment is needed... */
-	  break;
-	case BFD_RELOC_16_PCREL:
 	  /* There is no need to add adjustments if both the place to fix up
 	     and the symbol are known to be in the same segment.  */
+	  sym = exp->X_add_symbol;
+	  if (exp->X_op != O_symbol
+	      || ! snapshot_symbol (&sym, &xval, &xseg, &xfrag)
+	      || xseg != now_seg)
+	    {
+	      expressionS now_seg_expr;
+	      now_seg_expr.X_op = O_symbol;
+	      now_seg_expr.X_add_symbol = section_symbol (now_seg);
+	      now_seg_expr.X_add_number = 0;
+	      fix_new_exp (frag, off, len, &now_seg_expr, 0,
+			   BFD_RELOC_386_OZ8);
+	      fix_new_exp (frag, off, len, exp, 0, BFD_RELOC_386_OZSUB8);
+	    }
+	  break;
+	case BFD_RELOC_16_PCREL:
 	  sym = exp->X_add_symbol;
 	  if (exp->X_op != O_symbol
 	      || ! snapshot_symbol (&sym, &xval, &xseg, &xfrag)
