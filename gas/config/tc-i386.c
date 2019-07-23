@@ -3292,6 +3292,8 @@ tc_i386_fix_adjustable (fixS *fixP ATTRIBUTE_UNUSED)
       || fixP->fx_r_type == BFD_RELOC_386_OZSUB32
       || fixP->fx_r_type == BFD_RELOC_386_OZ16
       || fixP->fx_r_type == BFD_RELOC_386_OZ32
+      || fixP->fx_r_type == BFD_RELOC_386_OZSUB8
+      || fixP->fx_r_type == BFD_RELOC_386_OZ8
       || fixP->fx_r_type == BFD_RELOC_X86_64_PLT32
       || fixP->fx_r_type == BFD_RELOC_X86_64_GOT32
       || fixP->fx_r_type == BFD_RELOC_X86_64_GOTPCREL
@@ -7739,15 +7741,79 @@ need_plt32_p (symbolS *s)
 #endif
 
 static fixS *
-x86_fix_new_exp_wrt (fragS *frag, unsigned int off, unsigned int len,
-		     expressionS *exp, int pcrel, bfd_reloc_code_real_type r)
+x86_fix_new_wrt (fragS *frag, int off, int len, symbolS *add_symbol,
+		 offsetT offset, int pcrel, bfd_reloc_code_real_type r)
 {
   valueT xval;
   segT xseg;
   fragS *xfrag;
   symbolS *sym;
 
-  if (! object_64bit)
+  if (generate_wrt_oz_relocations && ! object_64bit)
+    {
+      switch (r)
+	{
+	case BFD_RELOC_8:
+	  fix_new (frag, off, len, add_symbol, 0, 0, BFD_RELOC_386_OZSUB8);
+	  break;
+	case BFD_RELOC_16:
+	  fix_new (frag, off, len, add_symbol, 0, 0, BFD_RELOC_386_OZSUB16);
+	  break;
+	case BFD_RELOC_32:
+	  fix_new (frag, off, len, add_symbol, 0, 0, BFD_RELOC_386_OZSUB32);
+	  break;
+	case BFD_RELOC_8_PCREL:
+	  /* There is no need to add adjustments if both the place to fix up
+	     and the symbol are known to be in the same segment.  */
+	  sym = add_symbol;
+	  if (! snapshot_symbol (&sym, &xval, &xseg, &xfrag)
+	      || xseg != now_seg)
+	    {
+	      fix_new (frag, off, len, section_symbol (now_seg), 0, 0,
+		       BFD_RELOC_386_OZ8);
+	      fix_new (frag, off, len, add_symbol, 0, 0, BFD_RELOC_386_OZSUB8);
+	    }
+	  break;
+	case BFD_RELOC_16_PCREL:
+	  sym = add_symbol;
+	  if (! snapshot_symbol (&sym, &xval, &xseg, &xfrag)
+	      || xseg != now_seg)
+	    {
+	      fix_new (frag, off, len, section_symbol (now_seg), 0, 0,
+		       BFD_RELOC_386_OZ16);
+	      fix_new (frag, off, len, add_symbol, 0, 0,
+		       BFD_RELOC_386_OZSUB16);
+	    }
+	  break;
+	case BFD_RELOC_32_PCREL:
+	  sym = add_symbol;
+	  if (! snapshot_symbol (&sym, &xval, &xseg, &xfrag)
+	      || xseg != now_seg)
+	    {
+	      fix_new (frag, off, len, section_symbol (now_seg), 0, 0,
+		       BFD_RELOC_386_OZ32);
+	      fix_new (frag, off, len, add_symbol, 0, 0,
+		       BFD_RELOC_386_OZSUB32);
+	    }
+	  break;
+	default:
+	  break;
+	}
+    }
+
+  return fix_new (frag, off, len, add_symbol, offset, pcrel, r);
+}
+
+static fixS *
+x86_fix_new_exp_wrt (fragS *frag, int off, int len, expressionS *exp,
+		     int pcrel, bfd_reloc_code_real_type r)
+{
+  valueT xval;
+  segT xseg;
+  fragS *xfrag;
+  symbolS *sym;
+
+  if (generate_wrt_oz_relocations && ! object_64bit)
     {
       switch (r)
 	{
@@ -7768,12 +7834,8 @@ x86_fix_new_exp_wrt (fragS *frag, unsigned int off, unsigned int len,
 	      || ! snapshot_symbol (&sym, &xval, &xseg, &xfrag)
 	      || xseg != now_seg)
 	    {
-	      expressionS now_seg_expr;
-	      now_seg_expr.X_op = O_symbol;
-	      now_seg_expr.X_add_symbol = section_symbol (now_seg);
-	      now_seg_expr.X_add_number = 0;
-	      fix_new_exp (frag, off, len, &now_seg_expr, 0,
-			   BFD_RELOC_386_OZ8);
+	      fix_new (frag, off, len, section_symbol (now_seg), 0, 0,
+		       BFD_RELOC_386_OZ8);
 	      fix_new_exp (frag, off, len, exp, 0, BFD_RELOC_386_OZSUB8);
 	    }
 	  break;
@@ -7783,12 +7845,8 @@ x86_fix_new_exp_wrt (fragS *frag, unsigned int off, unsigned int len,
 	      || ! snapshot_symbol (&sym, &xval, &xseg, &xfrag)
 	      || xseg != now_seg)
 	    {
-	      expressionS now_seg_expr;
-	      now_seg_expr.X_op = O_symbol;
-	      now_seg_expr.X_add_symbol = section_symbol (now_seg);
-	      now_seg_expr.X_add_number = 0;
-	      fix_new_exp (frag, off, len, &now_seg_expr, 0,
-			   BFD_RELOC_386_OZ16);
+	      fix_new (frag, off, len, section_symbol (now_seg), 0, 0,
+		       BFD_RELOC_386_OZ16);
 	      fix_new_exp (frag, off, len, exp, 0, BFD_RELOC_386_OZSUB16);
 	    }
 	  break;
@@ -7798,12 +7856,8 @@ x86_fix_new_exp_wrt (fragS *frag, unsigned int off, unsigned int len,
 	      || ! snapshot_symbol (&sym, &xval, &xseg, &xfrag)
 	      || xseg != now_seg)
 	    {
-	      expressionS now_seg_expr;
-	      now_seg_expr.X_op = O_symbol;
-	      now_seg_expr.X_add_symbol = section_symbol (now_seg);
-	      now_seg_expr.X_add_number = 0;
-	      fix_new_exp (frag, off, len, &now_seg_expr, 0,
-			   BFD_RELOC_386_OZ32);
+	      fix_new (frag, off, len, section_symbol (now_seg), 0, 0,
+		       BFD_RELOC_386_OZ32);
 	      fix_new_exp (frag, off, len, exp, 0, BFD_RELOC_386_OZSUB32);
 	    }
 	  break;
@@ -8804,6 +8858,12 @@ lex_got (enum bfd_reloc_code_real *rel,
     { STRING_COMMA_LEN ("OZ32"),     { BFD_RELOC_386_OZ32,
 				       _dummy_first_bfd_reloc_code_real },
       OPERAND_TYPE_NONE },
+    { STRING_COMMA_LEN ("OZSUB8"),   { BFD_RELOC_386_OZSUB8,
+				       _dummy_first_bfd_reloc_code_real },
+      OPERAND_TYPE_NONE },
+    { STRING_COMMA_LEN ("OZ8"),      { BFD_RELOC_386_OZ8,
+				       _dummy_first_bfd_reloc_code_real },
+      OPERAND_TYPE_NONE },
   };
   char *cp;
   unsigned int j;
@@ -8857,6 +8917,8 @@ lex_got (enum bfd_reloc_code_real *rel,
 		  && r != BFD_RELOC_386_OZSUB32
 		  && r != BFD_RELOC_386_OZ16
 		  && r != BFD_RELOC_386_OZ32
+		  && r != BFD_RELOC_386_OZSUB8
+		  && r != BFD_RELOC_386_OZ8
 		  && GOT_symbol == NULL)
 		GOT_symbol = symbol_find_or_make (GLOBAL_OFFSET_TABLE_NAME);
 
@@ -10370,10 +10432,10 @@ md_estimate_size_before_relax (fragS *fragP, segT segment)
 	  /* Make jmp (0xeb) a (d)word displacement jump.  */
 	  opcode[0] = 0xe9;
 	  fragP->fr_fix += size;
-	  fix_new (fragP, old_fr_fix, size,
-		   fragP->fr_symbol,
-		   fragP->fr_offset, 1,
-		   reloc_type);
+	  x86_fix_new_wrt (fragP, old_fr_fix, size,
+			   fragP->fr_symbol,
+			   fragP->fr_offset, 1,
+			   reloc_type);
 	  break;
 
 	case COND_JUMP86:
@@ -10389,10 +10451,10 @@ md_estimate_size_before_relax (fragS *fragP, segT segment)
 	      /* We added two extra opcode bytes, and have a two byte
 		 offset.  */
 	      fragP->fr_fix += 2 + 2;
-	      fix_new (fragP, old_fr_fix + 2, 2,
-		       fragP->fr_symbol,
-		       fragP->fr_offset, 1,
-		       reloc_type);
+	      x86_fix_new_wrt (fragP, old_fr_fix + 2, 2,
+			       fragP->fr_symbol,
+			       fragP->fr_offset, 1,
+			       reloc_type);
 	      break;
 	    }
 	  /* Fall through.  */
@@ -10403,10 +10465,10 @@ md_estimate_size_before_relax (fragS *fragP, segT segment)
 	      fixS *fixP;
 
 	      fragP->fr_fix += 1;
-	      fixP = fix_new (fragP, old_fr_fix, 1,
-			      fragP->fr_symbol,
-			      fragP->fr_offset, 1,
-			      BFD_RELOC_8_PCREL);
+	      fixP = x86_fix_new_wrt (fragP, old_fr_fix, 1,
+				      fragP->fr_symbol,
+				      fragP->fr_offset, 1,
+				      BFD_RELOC_8_PCREL);
 	      fixP->fx_signed = 1;
 	      break;
 	    }
@@ -10417,10 +10479,10 @@ md_estimate_size_before_relax (fragS *fragP, segT segment)
 	  opcode[0] = TWO_BYTE_OPCODE_ESCAPE;
 	  /* We've added an opcode byte.  */
 	  fragP->fr_fix += 1 + size;
-	  fix_new (fragP, old_fr_fix + 1, size,
-		   fragP->fr_symbol,
-		   fragP->fr_offset, 1,
-		   reloc_type);
+	  x86_fix_new_wrt (fragP, old_fr_fix + 1, size,
+			   fragP->fr_symbol,
+			   fragP->fr_offset, 1,
+			   reloc_type);
 	  break;
 
 	default:
