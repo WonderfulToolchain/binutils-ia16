@@ -38,15 +38,42 @@ static bfd_vma num_mz_reloc_sections = 0;
 static void
 i386_mz_after_open (void)
 {
+  size_t num_new_secs = 0, new_secs_top = 0;
+  asection **new_secs = NULL;
+
+  /* For now, only the ELF linker code can properly handle the special
+     section types.  Check for them if we are not targeting ELF.  -- tkchia */
+  if (! CONST_STRNEQ (bfd_get_target (link_info.output_bfd), "elf32"))
+    {
+      LANG_FOR_EACH_INPUT_STATEMENT (is)
+	{
+	  bfd *abfd = is->the_bfd;
+	  asection *sec;
+
+	  if (! CONST_STRNEQ (bfd_get_target (abfd), "elf32"))
+	    continue;
+
+	  for (sec = abfd->sections; sec; sec = sec->next)
+	    {
+	      unsigned sh_type = elf_section_data (sec)->this_hdr.sh_type;
+	      switch (sh_type)
+		{
+		case SHT_IA16_PROG_ORG:
+		  einfo (_("%P: cannot output non-ELF, input has section \
+\`%pA' type 0x%v\n"), sec, (bfd_vma) sh_type);
+		  bfd_set_error (bfd_error_bad_value);
+		  return;
+		}
+	    }
+	}
+    }
+
   /* For each input file, check if it uses any R_386_{SEGMENT16, SEG16X}
      relocations.  If it does, add a .msdos_mz_reloc.* section to it, with
      the right size.
 
      Try not to waste memory on sections with no R_386_{SEGMENT16, SEG16X}
      relocations.  -- tkchia  */
-  size_t num_new_secs = 0, new_secs_top = 0;
-  asection **new_secs = NULL;
-
   if (! bfd_link_relocatable (&link_info))
     {
       LANG_FOR_EACH_INPUT_STATEMENT (is)
@@ -74,6 +101,7 @@ i386_mz_after_open (void)
 		  /* xgettext:c-format */
 		  einfo (_("%P: errors encountered processing file %s\n"),
 			 is->filename);
+		  bfd_set_error (bfd_error_bad_value);
 		  goto cont;
 		}
 
@@ -87,8 +115,9 @@ i386_mz_after_open (void)
 			{
 			  /* xgettext:c-format */
 			  einfo (_("%P: too many MZ relocations needed\n"));
+			  bfd_set_error (bfd_error_file_too_big);
 			  if (elf_section_data (sec)->relocs != irels)
-			    free (irels);
+			    free (irels);	
 			  goto cont;
 			}
 
@@ -119,6 +148,7 @@ i386_mz_after_open (void)
 	      /* xgettext:c-format */
 	      einfo (_("%P: cannot make MZ relocation section for file %s\n"),
 		     is->filename);
+	      bfd_set_error (bfd_error_no_memory);
 	      goto cont;
 	    }
 
@@ -128,6 +158,7 @@ i386_mz_after_open (void)
 	      /* xgettext:c-format */
 	      einfo (_("%P: no memory for MZ relocations for file %s\n"),
 		     is->filename);
+	      bfd_set_error (bfd_error_no_memory);
 	      goto cont;
 	    }
 
@@ -138,6 +169,7 @@ i386_mz_after_open (void)
 	    {
 	      /* xgettext:c-format */
 	      einfo (_("%P: too many MZ relocation sections needed\n"));
+	      bfd_set_error (bfd_error_file_too_big);
 	      goto cont;
 	    }
 
@@ -165,6 +197,8 @@ cont:
   gld${EMULATION_NAME}_after_open ();
 }
 
+bfd_boolean bfd_i386_elf_get_true_prog_org (bfd *, bfd_vma *);
+
 static void
 gld${EMULATION_NAME}_finish (void)
 {
@@ -181,23 +215,12 @@ gld${EMULATION_NAME}_finish (void)
 	  asection *mz_section = *pmzs, *sec, *osec;
 	  bfd *ibfd = mz_section->owner;
 	  bfd *obfd = link_info.output_bfd;
-	  asection *hdr_sec = bfd_get_section_by_name (obfd, ".msdos_mz_hdr");
 	  bfd_vma subtrahend = 0;
 	  bfd_size_type reloc_idx = 0;
 	  Elf_Internal_Rela *irels = NULL, *irel, *irelend;
 
-	  if (hdr_sec)
-	    {
-	      if (hdr_sec->lma % 16 != 0 || hdr_sec->size % 16 != 0)
-		{
-		  /* xgettext:c-format */
-		  einfo (_("%P: R_386_SEGMENT16 or R_386_SEG16X with \
-unaligned MZ header\n"));
-		  break;
-		}
-
-	      subtrahend = hdr_sec->lma / 16 + hdr_sec->size / 16;
-	    }
+	  if (! bfd_i386_elf_get_true_prog_org (obfd, &subtrahend))
+	    goto cont;
 
 	  for (sec = ibfd->sections; sec; sec = sec->next)
 	    {
@@ -217,6 +240,7 @@ unaligned MZ header\n"));
 		  /* xgettext:c-format */
 		  einfo (_("%P: errors encountered processing file %s\n"),
 			 ibfd->filename);
+		  bfd_set_error (bfd_error_bad_value);
 		  goto cont;
 		}
 
@@ -233,6 +257,7 @@ unaligned MZ header\n"));
 			  /* xgettext:c-format */
 			  einfo (_("%P: R_386_SEGMENT16 with \
 unaligned output section\n"));
+			  bfd_set_error (bfd_error_bad_value);
 			  break;
 			}
 		      bfd_put_16 (ibfd,

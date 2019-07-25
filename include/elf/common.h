@@ -531,6 +531,9 @@
 /* #define SHT_HIUSER	0x8FFFFFFF    *//* Application-specific semantics */
 #define SHT_HIUSER	0xFFFFFFFF	/* New value, defined in Oct 4, 1999 Draft */
 
+/* Experimental section types for 16-bit x86 segment relocations.  */
+#define SHT_IA16_PROG_ORG 0x8086006F	/* True IA-16 program content start */
+
 /* Values for section header, sh_flags field.  */
 
 #define SHF_WRITE	(1 << 0)	/* Writable data during execution */
