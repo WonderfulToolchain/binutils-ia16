@@ -29,6 +29,7 @@
 
 #include "elf/i386.h"
 
+bfd_boolean bfd_i386_elf_get_true_prog_org (bfd *, bfd_vma *);
 static bfd_reloc_status_type bfd_i386_elf_reloc_nonelf (bfd *, arelent *,
 							asymbol *, void *,
 							asection *, bfd *,
@@ -274,35 +275,53 @@ non-ELF"), abfd, reloc_entry->howto->name);
 
    If the MZ header (or whatever executable header is in use) has its own
    section, also subtract the LMA for the end of the header.  For now,
-   recognize the section names .ia16.hdr, .msdos_mz_hdr, and .hdr, in that
-   order.  (The last two are for compatibility with existing linker
+   recognize
+     * the special ELF section type 0x8086006f (SHT_IA16_PROG_ORG), and
+     * the section names .ia16.hdr, .msdos_mz_hdr, and .hdr,
+   in that order.  (The last two are for compatibility with existing linker
    scripts.)  -- tkchia */
-static bfd_boolean
-bfd_i386_elf_get_true_load_begin (bfd *output_bfd, bfd_vma *begin)
+bfd_boolean
+bfd_i386_elf_get_true_prog_org (bfd *output_bfd, bfd_vma *begin)
 {
-  asection *hdr_sec = bfd_get_section_by_name (output_bfd, ".ia16.hdr");
+  asection *hdr_sec = NULL;
 
-  if (! hdr_sec)
+  if (CONST_STRNEQ (bfd_get_target (output_bfd), "elf32"))
     {
-      hdr_sec = bfd_get_section_by_name (output_bfd, ".msdos_mz_hdr");
-      if (! hdr_sec)
+      asection *sec;
+      for (sec = output_bfd->sections; sec; sec = sec->next)
 	{
-	  hdr_sec = bfd_get_section_by_name (output_bfd, ".hdr");
-	  if (! hdr_sec)
+	  if (elf_section_data (sec)->this_hdr.sh_type == SHT_IA16_PROG_ORG)
 	    {
-	      *begin = 0;
-	      return TRUE;
+	      if (hdr_sec
+		  && hdr_sec->lma + hdr_sec->size != sec->lma + sec->size)
+		{
+		  /* xgettext:c-format */
+		  _bfd_error_handler (_("%pB: conflicting IA-16 program \
+origins from `%pA' and `%pA'"), output_bfd, hdr_sec, sec);
+		  bfd_set_error (bfd_error_bad_value);
+		  return FALSE;
+		}
+	      hdr_sec = sec;
 	    }
 	}
     }
 
-  if (hdr_sec->lma % 16 != 0 || hdr_sec->size % 16 != 0)
+  if (! hdr_sec)
     {
-      /* xgettext:c-format */
-      _bfd_error_handler (_("%pB: IA-16 relocation with unaligned output \
-file header"), output_bfd);
-      bfd_set_error (bfd_error_bad_value);
-      return FALSE;
+      hdr_sec = bfd_get_section_by_name (output_bfd, ".ia16.hdr");
+      if (! hdr_sec)
+	{
+	  hdr_sec = bfd_get_section_by_name (output_bfd, ".msdos_mz_hdr");
+	  if (! hdr_sec)
+	    {
+	      hdr_sec = bfd_get_section_by_name (output_bfd, ".hdr");
+	      if (! hdr_sec)
+		{
+		  *begin = 0;
+		  return TRUE;
+		}
+	    }
+	}
     }
 
   *begin = hdr_sec->lma + hdr_sec->size;
@@ -340,7 +359,7 @@ unaligned section `%pA'"), output_bfd, output_section);
       return FALSE;
     }
 
-  if (! bfd_i386_elf_get_true_load_begin (output_bfd, &begin))
+  if (! bfd_i386_elf_get_true_prog_org (output_bfd, &begin))
     return FALSE;
 
   dist -= begin / 16;
@@ -2310,6 +2329,7 @@ elf_i386_relocate_section (bfd *output_bfd,
   bfd_boolean is_vxworks_tls;
   unsigned plt_entry_size;
   bfd_boolean ignore_reloc_overflow;
+  bfd_vma ia16_prog_org = (bfd_vma) -1;
 
   /* Skip if check_relocs failed.  */
   if (input_section->check_relocs_failed)
@@ -3033,17 +3053,22 @@ disallow_got32:
 	    relocation = 0;
 	  else
 	    {
-	      bfd_vma begin;
+	      if (! sec || bfd_is_const_section (sec) || ! sec->output_section)
+		{
+		  bfd_set_error (bfd_error_bad_value);
+		  return FALSE;
+		}
 
-	      if (! sec || bfd_is_const_section (sec) || ! sec->output_section
-		  || ! bfd_i386_elf_get_true_load_begin (output_bfd, &begin))
+	      if (ia16_prog_org == (bfd_vma) -1
+		  && ! bfd_i386_elf_get_true_prog_org (output_bfd,
+						       &ia16_prog_org))
 		{
 		  bfd_set_error (bfd_error_bad_value);
 		  return FALSE;
 		}
 
 	      relocation = sec->output_section->lma - sec->output_section->vma
-			   - begin;
+			   - ia16_prog_org;
 
 	      if (r_type == R_386_OZSUB16 || r_type == R_386_OZSUB32)
 		relocation = -relocation;
