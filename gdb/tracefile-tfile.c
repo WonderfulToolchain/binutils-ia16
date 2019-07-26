@@ -20,8 +20,8 @@
 #include "defs.h"
 #include "tracefile.h"
 #include "readline/tilde.h"
-#include "filestuff.h"
-#include "rsp-low.h" /* bin2hex */
+#include "gdbsupport/filestuff.h"
+#include "gdbsupport/rsp-low.h" /* bin2hex */
 #include "regcache.h"
 #include "inferior.h"
 #include "gdbthread.h"
@@ -31,7 +31,7 @@
 #include "remote.h"
 #include "xml-tdesc.h"
 #include "target-descriptions.h"
-#include "buffer.h"
+#include "gdbsupport/buffer.h"
 #include <algorithm>
 
 #ifndef O_LARGEFILE
@@ -511,7 +511,7 @@ tfile_target_open (const char *arg, int from_tty)
   ts->disconnected_tracing = 0;
   ts->circular_buffer = 0;
 
-  TRY
+  try
     {
       /* Read through a section of newline-terminated lines that
 	 define things like tracepoints.  */
@@ -547,13 +547,12 @@ tfile_target_open (const char *arg, int from_tty)
       if (trace_regblock_size == 0)
 	error (_("No register block size recorded in trace file"));
     }
-  CATCH (ex, RETURN_MASK_ALL)
+  catch (const gdb_exception &ex)
     {
       /* Remove the partially set up target.  */
       unpush_target (&tfile_ops);
-      throw_exception (ex);
+      throw;
     }
-  END_CATCH
 
   inferior_appeared (current_inferior (), TFILE_PID);
   inferior_ptid = ptid_t (TFILE_PID);

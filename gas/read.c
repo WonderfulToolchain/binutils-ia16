@@ -3760,7 +3760,8 @@ ignore_rest_of_line (void)
   input_line_pointer++;
 
   /* Return pointing just after end-of-line.  */
-  know (is_end_of_line[(unsigned char) input_line_pointer[-1]]);
+  if (input_line_pointer <= buffer_limit)
+    know (is_end_of_line[(unsigned char) input_line_pointer[-1]]);
 }
 
 /* Sets frag for given symbol to zero_address_frag, except when the
@@ -5364,8 +5365,6 @@ stringer (int bits_appendzero)
 	  if (append_zero)
 	    stringer_append_char (0, bitsize);
 
-	  know (input_line_pointer[-1] == '\"');
-
 #if !defined(NO_LISTING) && defined (OBJ_ELF)
 	  /* In ELF, when gcc is emitting DWARF 1 debugging output, it
 	     will emit .string with a filename in the .debug section
@@ -6215,10 +6214,7 @@ static char *saved_limit;
    overruns should not occur.  Saves the current input line pointer so that
    it can be restored by calling restore_ilp().
 
-   Does not support recursion.
-
-   FIXME: This function is currently only used by stabs.c but that
-   should be extended to other files in the gas source directory.  */
+   Does not support recursion.  */
 
 void
 temp_ilp (char *buf)

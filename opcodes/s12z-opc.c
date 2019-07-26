@@ -36,8 +36,8 @@ typedef int (* insn_bytes_f) (struct mem_read_abstraction_base *);
 typedef void (*operands_f) (struct mem_read_abstraction_base *,
 			    int *n_operands, struct operand **operand);
 
-typedef enum operator (*discriminator_f) (struct mem_read_abstraction_base *,
-					  enum operator hint);
+typedef enum optr (*discriminator_f) (struct mem_read_abstraction_base *,
+					  enum optr hint);
 
 enum OPR_MODE
   {
@@ -969,12 +969,12 @@ static void bit_field_decode (struct mem_read_abstraction_base *mra, int *n_oper
 static void exg_sex_decode (struct mem_read_abstraction_base *mra, int *n_operands, struct operand **operands);
 
 
-static enum operator shift_discrim (struct mem_read_abstraction_base *mra, enum operator hint);
-static enum operator psh_pul_discrim (struct mem_read_abstraction_base *mra, enum operator hint);
-static enum operator mul_discrim (struct mem_read_abstraction_base *mra, enum operator hint);
-static enum operator loop_primitive_discrim (struct mem_read_abstraction_base *mra, enum operator hint);
-static enum operator bit_field_discrim (struct mem_read_abstraction_base *mra, enum operator hint);
-static enum operator exg_sex_discrim (struct mem_read_abstraction_base *mra, enum operator hint);
+static enum optr shift_discrim (struct mem_read_abstraction_base *mra, enum optr hint);
+static enum optr psh_pul_discrim (struct mem_read_abstraction_base *mra, enum optr hint);
+static enum optr mul_discrim (struct mem_read_abstraction_base *mra, enum optr hint);
+static enum optr loop_primitive_discrim (struct mem_read_abstraction_base *mra, enum optr hint);
+static enum optr bit_field_discrim (struct mem_read_abstraction_base *mra, enum optr hint);
+static enum optr exg_sex_discrim (struct mem_read_abstraction_base *mra, enum optr hint);
 
 
 static void
@@ -1005,8 +1005,8 @@ sub_d6_y_x (struct mem_read_abstraction_base *mra ATTRIBUTE_UNUSED,
 
 static void ld_18bit_decode (struct mem_read_abstraction_base *mra, int *n_operands, struct operand **operand);
 
-static enum operator
-mul_discrim (struct mem_read_abstraction_base *mra, enum operator hint)
+static enum optr
+mul_discrim (struct mem_read_abstraction_base *mra, enum optr hint)
 {
   uint8_t mb;
   int status = mra->read (mra, 0, 1, &mb);
@@ -1042,7 +1042,7 @@ mul_discrim (struct mem_read_abstraction_base *mra, enum operator hint)
 struct opcode
 {
   /* The operation that this opcode performs.  */
-  enum operator operator;
+  enum optr operator;
 
   /* The size of this operation.  May be -1 if it is implied
      in the operands or if size is not applicable.  */
@@ -1821,6 +1821,7 @@ bm_decode (struct mem_read_abstraction_base *mra,
   switch (mode)
     {
     case BM_REG_IMM:
+    case BM_RESERVED0:
       imm = (bm & 0x38) >> 3;
       operand[(*n_operands)++] = create_immediate_operand (imm);
       break;
@@ -1837,9 +1838,6 @@ bm_decode (struct mem_read_abstraction_base *mra,
     case BM_OPR_REG:
     case BM_RESERVED1:
       operand[(*n_operands)++] = create_register_operand ((bm & 0x70) >> 4);
-      break;
-    case BM_RESERVED0:
-      assert (0);
       break;
     }
 }
@@ -2196,8 +2194,8 @@ loop_prim_n_bytes (struct mem_read_abstraction_base *mra)
 
 
 
-static enum operator
-exg_sex_discrim (struct mem_read_abstraction_base *mra, enum operator hint ATTRIBUTE_UNUSED)
+static enum optr
+exg_sex_discrim (struct mem_read_abstraction_base *mra, enum optr hint ATTRIBUTE_UNUSED)
 {
   uint8_t eb;
   int status = mra->read (mra, 0, 1, &eb);
@@ -2210,7 +2208,7 @@ exg_sex_discrim (struct mem_read_abstraction_base *mra, enum operator hint ATTRI
   const struct reg *r0 = registers + ((struct register_operand *) op0)->reg;
   const struct reg *r1 = registers + ((struct register_operand *) op1)->reg;
 
-  enum operator operator = (r0->bytes < r1->bytes) ? OP_sex : OP_exg;
+  enum optr operator = (r0->bytes < r1->bytes) ? OP_sex : OP_exg;
 
   free (op0);
   free (op1);
@@ -2233,16 +2231,16 @@ exg_sex_decode (struct mem_read_abstraction_base *mra,
   operands[(*n_operands)++] =  create_register_operand (eb & 0xf);
 }
 
-static enum operator
+static enum optr
 loop_primitive_discrim (struct mem_read_abstraction_base *mra,
-			enum operator hint ATTRIBUTE_UNUSED)
+			enum optr hint ATTRIBUTE_UNUSED)
 {
   uint8_t lb;
   int status = mra->read (mra, 0, 1, &lb);
   if (status < 0)
     return OP_INVALID;
 
-  enum operator opbase = (lb & 0x80) ? OP_dbNE : OP_tbNE;
+  enum optr opbase = (lb & 0x80) ? OP_dbNE : OP_tbNE;
   return opbase + ((lb & 0x70) >> 4);
 }
 
@@ -2287,14 +2285,14 @@ loop_primitive_decode (struct mem_read_abstraction_base *mra,
 }
 
 
-static enum operator
-shift_discrim (struct mem_read_abstraction_base *mra,  enum operator hint ATTRIBUTE_UNUSED)
+static enum optr
+shift_discrim (struct mem_read_abstraction_base *mra,  enum optr hint ATTRIBUTE_UNUSED)
 {
   size_t i;
   uint8_t sb;
   int status = mra->read (mra, 0, 1, &sb);
   if (status < 0)
-    return status;
+    return OP_INVALID;
 
   enum SB_DIR  dir = (sb & 0x40) ? SB_LEFT : SB_RIGHT;
   enum SB_TYPE type = (sb & 0x80) ? SB_ARITHMETIC : SB_LOGICAL;
@@ -2474,9 +2472,9 @@ shift_decode (struct mem_read_abstraction_base *mra,  int *n_operands, struct op
     }
 }
 
-static enum operator
+static enum optr
 psh_pul_discrim (struct mem_read_abstraction_base *mra,
-		 enum operator hint ATTRIBUTE_UNUSED)
+		 enum optr hint ATTRIBUTE_UNUSED)
 {
   uint8_t byte;
   int status = mra->read (mra, 0, 1, &byte);
@@ -2528,8 +2526,8 @@ psh_pul_decode (struct mem_read_abstraction_base *mra,
     }
 }
 
-static enum operator
-bit_field_discrim (struct mem_read_abstraction_base *mra, enum operator hint ATTRIBUTE_UNUSED)
+static enum optr
+bit_field_discrim (struct mem_read_abstraction_base *mra, enum optr hint ATTRIBUTE_UNUSED)
 {
   int status;
   bfd_byte bb;
@@ -2647,12 +2645,12 @@ bit_field_decode (struct mem_read_abstraction_base *mra,
    The operation to be performed is returned.
    The number of operands, will be placed in N_OPERANDS.
    The operands themselved into OPERANDS.  */
-static enum operator
+static enum optr
 decode_operation (const struct opcode *opc,
 		  struct mem_read_abstraction_base *mra,
 		  int *n_operands, struct operand **operands)
 {
-  enum operator op = opc->operator;
+  enum optr op = opc->operator;
   if (opc->discriminator)
     op = opc->discriminator (mra, opc->operator);
 
@@ -2666,7 +2664,7 @@ decode_operation (const struct opcode *opc,
 }
 
 int
-decode_s12z (enum operator *myoperator, short *osize,
+decode_s12z (enum optr *myoperator, short *osize,
 	     int *n_operands, struct operand **operands,
 	     struct mem_read_abstraction_base *mra)
 {

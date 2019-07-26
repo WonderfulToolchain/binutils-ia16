@@ -50,7 +50,7 @@
 
 @copying
 @c man begin COPYRIGHT
-Copyright @copyright{} 1988-2018 Free Software Foundation, Inc.
+Copyright @copyright{} 1988-2019 Free Software Foundation, Inc.
 
 Permission is granted to copy, distribute and/or modify this document
 under the terms of the GNU Free Documentation License, Version 1.3 or
@@ -120,7 +120,7 @@ This is the @value{EDITION} Edition, for @value{GDBN}
 @end ifset
 Version @value{GDBVN}.
 
-Copyright (C) 1988-2018 Free Software Foundation, Inc.
+Copyright (C) 1988-2019 Free Software Foundation, Inc.
 
 This edition of the GDB manual is dedicated to the memory of Fred
 Fish.  Fred was a long-standing contributor to GDB and to Free
@@ -874,16 +874,17 @@ specified:
 @value{GDBP} @var{program} @var{core}
 @end smallexample
 
-You can, instead, specify a process ID as a second argument, if you want
-to debug a running process:
+You can, instead, specify a process ID as a second argument or use option
+@code{-p}, if you want to debug a running process:
 
 @smallexample
 @value{GDBP} @var{program} 1234
+@value{GDBP} -p 1234
 @end smallexample
 
 @noindent
-would attach @value{GDBN} to process @code{1234} (unless you also have a file
-named @file{1234}; @value{GDBN} does check for a core file first).
+would attach @value{GDBN} to process @code{1234}.  With option @option{-p} you
+can omit the @var{program} filename.
 
 Taking advantage of the second command-line argument requires a fairly
 complete operating system; when you use @value{GDBN} as a remote
@@ -1268,12 +1269,12 @@ program or device.  This option is meant to be set by programs which
 communicate with @value{GDBN} using it as a back end.
 @xref{Interpreters, , Command Interpreters}.
 
-@samp{--interpreter=mi} (or @samp{--interpreter=mi2}) causes
-@value{GDBN} to use the @dfn{@sc{gdb/mi} interface} (@pxref{GDB/MI, ,
-The @sc{gdb/mi} Interface}) included since @value{GDBN} version 6.0.  The
-previous @sc{gdb/mi} interface, included in @value{GDBN} version 5.3 and
-selected with @samp{--interpreter=mi1}, is deprecated.  Earlier
-@sc{gdb/mi} interfaces are no longer supported.
+@samp{--interpreter=mi} (or @samp{--interpreter=mi3}) causes
+@value{GDBN} to use the @dfn{@sc{gdb/mi} interface} version 3 (@pxref{GDB/MI, ,
+The @sc{gdb/mi} Interface}) included since @value{GDBN} version 9.1.  @sc{gdb/mi}
+version 2 (@code{mi2}), included in @value{GDBN} 6.0 and version 1 (@code{mi1}),
+included in @value{GDBN} 5.3, are also available.  Earlier @sc{gdb/mi}
+interfaces are no longer supported.
 
 @item -write
 @cindex @code{--write}
@@ -1454,6 +1455,68 @@ Execute the @code{make} program with the specified
 arguments.  This is equivalent to @samp{shell make @var{make-args}}.
 @end table
 
+@table @code
+@kindex pipe
+@kindex |
+@cindex send the output of a gdb command to a shell command
+@anchor{pipe}
+@item pipe [@var{command}] | @var{shell_command}
+@itemx | [@var{command}] | @var{shell_command}
+@itemx pipe -d @var{delim} @var{command} @var{delim} @var{shell_command}
+@itemx | -d @var{delim} @var{command} @var{delim} @var{shell_command}
+Executes @var{command} and sends its output to @var{shell_command}.
+Note that no space is needed around @code{|}.
+If no @var{command} is provided, the last command executed is repeated.
+
+In case the @var{command} contains a @code{|}, the option @code{-d @var{delim}}
+can be used to specify an alternate delimiter string @var{delim} that separates
+the @var{command} from the @var{shell_command}.
+
+Example:
+@smallexample
+@group
+(gdb) p var
+$1 = @{
+  black = 144,
+  red = 233,
+  green = 377,
+  blue = 610,
+  white = 987
+@}
+@end group
+@group
+(gdb) pipe p var|wc
+      7      19      80
+(gdb) |p var|wc -l
+7
+@end group
+@group
+(gdb) p /x var
+$4 = @{
+  black = 0x90,
+  red = 0xe9,
+  green = 0x179,
+  blue = 0x262,
+  white = 0x3db
+@}
+(gdb) ||grep red
+  red => 0xe9,
+@end group
+@group
+(gdb) | -d ! echo this contains a | char\n ! sed -e 's/|/PIPE/'
+this contains a PIPE char
+(gdb) | -d xxx echo this contains a | char!\n xxx sed -e 's/|/PIPE/'
+this contains a PIPE char!
+(gdb)
+@end group
+@end smallexample
+@end table
+
+The convenience variables @code{$_shell_exitcode} and @code{$_shell_exitsignal}
+can be used to examine the exit status of the last shell command launched
+by @code{shell}, @code{make}, @code{pipe} and @code{|}.
+@xref{Convenience Vars,, Convenience Variables}.
+
 @node Logging Output
 @section Logging Output
 @cindex logging @value{GDBN} output
@@ -1477,11 +1540,16 @@ you want @code{set logging on} to overwrite the logfile instead.
 @item set logging redirect [on|off]
 By default, @value{GDBN} output will go to both the terminal and the logfile.
 Set @code{redirect} if you want output to go only to the log file.
+@item set logging debugredirect [on|off]
+By default, @value{GDBN} debug output will go to both the terminal and the logfile.
+Set @code{debugredirect} if you want debug output to go only to the log file.
 @kindex show logging
 @item show logging
 Show the current values of the logging settings.
 @end table
 
+You can also redirect the output of a @value{GDBN} command to a
+shell command.  @xref{pipe}.
 @node Commands
 @chapter @value{GDBN} Commands
 
@@ -1493,7 +1561,9 @@ show you the alternatives available, if there is more than one possibility).
 
 @menu
 * Command Syntax::              How to give commands to @value{GDBN}
+* Command Settings::            How to change default behavior of commands
 * Completion::                  Command completion
+* Command Options::             Command options
 * Help::                        How to ask @value{GDBN} for help
 @end menu
 
@@ -1548,6 +1618,98 @@ commands.  This command accepts the current line, like @key{RET}, and
 then fetches the next line relative to the current line from the history
 for editing.
 
+
+@node Command Settings
+@section Command Settings
+@cindex default behavior of commands, changing
+@cindex default settings, changing
+
+Many commands change their behavior according to command-specific
+variables or settings.  These settings can be changed with the
+@code{set} subcommands.  For example, the @code{print} command
+(@pxref{Data, ,Examining Data}) prints arrays differently depending on
+settings changeable with the commands @code{set print elements
+NUMBER-OF-ELEMENTS} and @code{set print array-indexes}, among others.
+
+You can change these settings to your preference in the gdbinit files
+loaded at @value{GDBN} startup.  @xref{Startup}.
+
+The settings can also be changed interactively during the debugging
+session.  For example, to change the limit of array elements to print,
+you can do the following:
+@smallexample
+(@value{GDBN}) set print elements 10
+(@value{GDBN}) print some_array
+$1 = @{0, 10, 20, 30, 40, 50, 60, 70, 80, 90...@}
+@end smallexample
+
+The above @code{set print elements 10} command changes the number of
+elements to print from the default of 200 to 10.  If you only intend
+this limit of 10 to be used for printing @code{some_array}, then you
+must restore the limit back to 200, with @code{set print elements
+200}.
+
+Some commands allow overriding settings with command options.  For
+example, the @code{print} command supports a number of options that
+allow overriding relevant global print settings as set by @code{set
+print} subcommands.  @xref{print options}.  The example above could be
+rewritten as:
+@smallexample
+(@value{GDBN}) print -elements 10 -- some_array
+$1 = @{0, 10, 20, 30, 40, 50, 60, 70, 80, 90...@}
+@end smallexample
+
+Alternatively, you can use the @code{with} command to change a setting
+temporarily, for the duration of a command invocation.
+
+@table @code
+@kindex with command
+@kindex w @r{(@code{with})}
+@cindex settings
+@cindex temporarily change settings
+@item with @var{setting} [@var{value}] [-- @var{command}]
+@itemx w @var{setting} [@var{value}] [-- @var{command}]
+Temporarily set @var{setting} to @var{value} for the duration of
+@var{command}.
+
+@var{setting} is any setting you can change with the @code{set}
+subcommands.  @var{value} is the value to assign to @code{setting}
+while running @code{command}.
+
+If no @var{command} is provided, the last command executed is
+repeated.
+
+If a @var{command} is provided, it must be preceded by a double dash
+(@code{--}) separator.  This is required because some settings accept
+free-form arguments, such as expressions or filenames.
+
+For example, the command
+@smallexample
+(@value{GDBN}) with print array on -- print some_array
+@end smallexample
+@noindent
+is equivalent to the following 3 commands:
+@smallexample
+(@value{GDBN}) set print array on
+(@value{GDBN}) print some_array
+(@value{GDBN}) set print array off
+@end smallexample
+
+The @code{with} command is particularly useful when you want to
+override a setting while running user-defined commands, or commands
+defined in Python or Guile.  @xref{Extending GDB,, Extending GDB}.
+
+@smallexample
+(@value{GDBN}) with print pretty on -- my_complex_command
+@end smallexample
+
+To change several settings for the same command, you can nest
+@code{with} commands.  For example, @code{with language ada -- with
+print elements 10} temporarily changes the language to Ada and sets a
+limit of 10 elements to print for arrays and strings.
+
+@end table
+
 @node Completion
 @section Command Completion
 
@@ -1556,7 +1718,8 @@ for editing.
 @value{GDBN} can fill in the rest of a word in a command for you, if there is
 only one possibility; it can also show you what the valid possibilities
 are for the next word in a command, at any time.  This works for @value{GDBN}
-commands, @value{GDBN} subcommands, and the names of symbols in your program.
+commands, @value{GDBN} subcommands, command options, and the names of symbols
+in your program.
 
 Press the @key{TAB} key whenever you want @value{GDBN} to fill out the rest
 of a word.  If there is only one possibility, @value{GDBN} fills in the
@@ -1756,6 +1919,70 @@ struct ui_file
 @}
 @end smallexample
 
+@node Command Options
+@section Command options
+
+@cindex command options
+Some commands accept options starting with a leading dash.  For
+example, @code{print -pretty}.  Similarly to command names, you can
+abbreviate a @value{GDBN} option to the first few letters of the
+option name, if that abbreviation is unambiguous, and you can also use
+the @key{TAB} key to get @value{GDBN} to fill out the rest of a word
+in an option (or to show you the alternatives available, if there is
+more than one possibility).
+
+@cindex command options, raw input
+Some commands take raw input as argument.  For example, the print
+command processes arbitrary expressions in any of the languages
+supported by @value{GDBN}.  With such commands, because raw input may
+start with a leading dash that would be confused with an option or any
+of its abbreviations, e.g.@: @code{print -r} (short for @code{print
+-raw} or printing negative @code{r}?), if you specify any command
+option, then you must use a double-dash (@code{--}) delimiter to
+indicate the end of options.
+
+@cindex command options, boolean
+
+Some options are described as accepting an argument which can be
+either @code{on} or @code{off}.  These are known as @dfn{boolean
+options}.  Similarly to boolean settings commands---@code{on} and
+@code{off} are the typical values, but any of @code{1}, @code{yes} and
+@code{enable} can also be used as ``true'' value, and any of @code{0},
+@code{no} and @code{disable} can also be used as ``false'' value.  You
+can also omit a ``true'' value, as it is implied by default.
+
+For example, these are equivalent:
+
+@smallexample
+(@value{GDBP}) print -object on -pretty off -element unlimited -- *myptr
+(@value{GDBP}) p -o -p 0 -e u -- *myptr
+@end smallexample
+
+You can discover the set of options some command accepts by completing
+on @code{-} after the command name.  For example:
+
+@smallexample
+(@value{GDBP}) print -@key{TAB}@key{TAB}
+-address         -max-depth       -repeats         -vtbl
+-array           -null-stop       -static-members
+-array-indexes   -object          -symbol
+-elements        -pretty          -union
+@end smallexample
+
+Completion will in some cases guide you with a suggestion of what kind
+of argument an option expects.  For example:
+
+@smallexample
+(@value{GDBP}) print -elements @key{TAB}@key{TAB}
+NUMBER     unlimited
+@end smallexample
+
+Here, the option expects a number (e.g., @code{100}), not literal
+@code{NUMBER}.  Such metasyntactical arguments are always presented in
+uppercase.
+
+(For more on using the @code{print} command, see @ref{Data, ,Examining
+Data}.)
 
 @node Help
 @section Getting Help
@@ -1828,10 +2055,13 @@ With a command name as @code{help} argument, @value{GDBN} displays a
 short paragraph on how to use that command.
 
 @kindex apropos
-@item apropos @var{args}
+@item apropos [-v] @var{regexp}
 The @code{apropos} command searches through all of the @value{GDBN}
 commands, and their documentation, for the regular expression specified in
-@var{args}.  It prints out all matches found.  For example:
+@var{args}.  It prints out all matches found.  The optional flag  @samp{-v},
+which stands for @samp{verbose}, indicates to output the full documentation
+of the matching commands and highlight the parts of the documentation
+matching @var{regexp}.  For example:
 
 @smallexample
 apropos alias
@@ -1841,13 +2071,38 @@ apropos alias
 results in:
 
 @smallexample
-@c @group
+@group
 alias -- Define a new command that is an alias of an existing command
 aliases -- Aliases of other commands
 d -- Delete some breakpoints or auto-display expressions
 del -- Delete some breakpoints or auto-display expressions
 delete -- Delete some breakpoints or auto-display expressions
-@c @end group
+@end group
+@end smallexample
+
+@noindent
+while
+
+@smallexample
+apropos -v cut.*thread apply
+@end smallexample
+
+@noindent
+results in the below output, where @samp{cut for 'thread apply}
+is highlighted if styling is enabled.
+
+@smallexample
+@group
+taas -- Apply a command to all threads (ignoring errors
+and empty output).
+Usage: taas COMMAND
+shortcut for 'thread apply all -s COMMAND'
+
+tfaas -- Apply a command to all frames of all threads
+(ignoring errors and empty output).
+Usage: tfaas COMMAND
+shortcut for 'thread apply all -s frame apply all -s COMMAND'
+@end group
 @end smallexample
 
 @kindex complete
@@ -3177,6 +3432,7 @@ As with the @samp{[New @dots{}]} message, the form of the text after
 @samp{Switching to} depends on your system's conventions for identifying
 threads.
 
+@anchor{thread apply all}
 @kindex thread apply
 @cindex apply command to several threads
 @item thread apply [@var{thread-id-list} | all [-ascending]] [@var{flag}]@dots{} @var{command}
@@ -3218,14 +3474,17 @@ Flags @code{-c} and @code{-s} cannot be used together.
 
 @kindex taas
 @cindex apply command to all threads (ignoring errors and empty output)
-@item taas @var{command}
-Shortcut for @code{thread apply all -s @var{command}}.
+@item taas [@var{option}]@dots{} @var{command}
+Shortcut for @code{thread apply all -s [@var{option}]@dots{} @var{command}}.
 Applies @var{command} on all threads, ignoring errors and empty output.
+
+The @code{taas} command accepts the same options as the @code{thread
+apply all} command.  @xref{thread apply all}.
 
 @kindex tfaas
 @cindex apply a command to all frames of all threads (ignoring errors and empty output)
-@item tfaas @var{command}
-Shortcut for @code{thread apply all -s frame apply all -s @var{command}}.
+@item tfaas [@var{option}]@dots{} @var{command}
+Shortcut for @code{thread apply all -s -- frame apply all -s [@var{option}]@dots{} @var{command}}.
 Applies @var{command} on all frames of all threads, ignoring errors
 and empty output.  Note that the flag @code{-s} is specified twice:
 The first @code{-s} ensures that @code{thread apply} only shows the thread
@@ -3241,6 +3500,8 @@ is, using:
 (@value{GDBP}) tfaas p some_local_var_i_do_not_remember_where_it_is
 @end smallexample
 
+The @code{tfaas} command accepts the same options as the @code{frame
+apply} command.  @xref{frame apply}.
 
 @kindex thread name
 @cindex name a thread
@@ -4509,7 +4770,7 @@ You cannot raise an exception interactively.
 You cannot install an exception handler interactively.
 @end itemize
 
-@item exception
+@item exception @r{[}@var{name}@r{]}
 @kindex catch exception
 @cindex Ada exception catching
 @cindex catch Ada exceptions
@@ -4527,7 +4788,11 @@ called @code{Constraint_Error} is defined in package @code{Pck}, then
 the command to use to catch such exceptions is @kbd{catch exception
 Pck.Constraint_Error}.
 
-@item handlers
+@item exception unhandled
+@kindex catch exception unhandled
+An exception that was raised but is not handled by the program.
+
+@item handlers @r{[}@var{name}@r{]}
 @kindex catch handlers
 @cindex Ada exception handlers catching
 @cindex catch Ada exceptions when handled
@@ -4546,10 +4811,6 @@ user-defined one.  For instance, assuming an exception called
  @code{Constraint_Error} is defined in package @code{Pck}, then the
 command to use to catch such exceptions handling is
 @kbd{catch handlers Pck.Constraint_Error}.
-
-@item exception unhandled
-@kindex catch exception unhandled
-An exception that was raised but is not handled by the program.
 
 @item assert
 @kindex catch assert
@@ -4727,8 +4988,8 @@ A call to @code{fork}.
 @kindex catch vfork
 A call to @code{vfork}.
 
-@item load @r{[}regexp@r{]}
-@itemx unload @r{[}regexp@r{]}
+@item load @r{[}@var{regexp}@r{]}
+@itemx unload @r{[}@var{regexp}@r{]}
 @kindex catch load
 @kindex catch unload
 The loading or unloading of a shared library.  If @var{regexp} is
@@ -5595,6 +5856,15 @@ abbreviated as @code{fin}.
 
 Contrast this with the @code{return} command (@pxref{Returning,
 ,Returning from a Function}).
+
+@kindex set print finish
+@kindex show print finish
+@item set print finish @r{[}on|off@r{]}
+@itemx show print finish
+By default the @code{finish} command will show the value that is
+returned by the function.  This can be disabled using @code{set print
+finish off}.  When disabled, the value is still entered into the value
+history (@pxref{Value History}), but not displayed.
 
 @kindex until
 @kindex u @r{(@code{until})}
@@ -6697,6 +6967,12 @@ assumes that the memory and registers that the target reports are in a
 consistant state, but @value{GDBN} accepts whatever it is given.
 }.
 
+On some platforms, @value{GDBN} has built-in support for reverse
+execution, activated with the @code{record} or @code{record btrace}
+commands.  @xref{Process Record and Replay}.  Some remote targets,
+typically full system emulators, support reverse execution directly
+without requiring any special command.
+
 If you are debugging in a target environment that supports
 reverse execution, @value{GDBN} provides the following commands.
 
@@ -6817,6 +7093,11 @@ replay mode as long as the execution log includes the record for the
 previous instruction; otherwise, it will work in record mode, if the
 platform supports reverse execution, or stop if not.
 
+Currently, process record and replay is supported on ARM, Aarch64,
+Moxie, PowerPC, PowerPC64, S/390, and x86 (i386/amd64) running
+GNU/Linux.  Process record and replay can be used both when native
+debugging, and when remote debugging via @code{gdbserver}.
+
 For architecture environments that support process record and replay,
 @value{GDBN} provides the following commands:
 
@@ -6851,13 +7132,14 @@ replay implementation.  This method allows replaying and reverse
 execution.
 
 @item btrace @var{format}
-Hardware-supported instruction recording.  This method does not record
-data.  Further, the data is collected in a ring buffer so old data will
-be overwritten when the buffer is full.  It allows limited reverse
-execution.  Variables and registers are not available during reverse
-execution.  In remote debugging, recording continues on disconnect.
-Recorded data can be inspected after reconnecting.  The recording may
-be stopped using @code{record stop}.
+Hardware-supported instruction recording, supported on Intel
+processors.  This method does not record data.  Further, the data is
+collected in a ring buffer so old data will be overwritten when the
+buffer is full.  It allows limited reverse execution.  Variables and
+registers are not available during reverse execution.  In remote
+debugging, recording continues on disconnect.  Recorded data can be
+inspected after reconnecting.  The recording may be stopped using
+@code{record stop}.
 
 The recording format can be specified as parameter.  Without a parameter
 the command chooses the recording format.  The following recording
@@ -7461,10 +7743,11 @@ printed.  You can stop the backtrace at any time by typing the system
 interrupt character, normally @kbd{Ctrl-c}.
 
 @table @code
-@item backtrace [@var{args}@dots{}]
-@itemx bt [@var{args}@dots{}]
-Print the backtrace of the entire stack.  The optional @var{args} can
-be one of the following:
+@item backtrace [@var{option}]@dots{} [@var{qualifier}]@dots{} [@var{count}]
+@itemx bt [@var{option}]@dots{} [@var{qualifier}]@dots{} [@var{count}]
+Print the backtrace of the entire stack.
+
+The optional @var{count} can be one of the following:
 
 @table @code
 @item @var{n}
@@ -7476,24 +7759,69 @@ number.
 @itemx -@var{n}
 Print only the outermost @var{n} frames, where @var{n} is a positive
 number.
+@end table
 
-@item full
+Options:
+
+@table @code
+@item -full
 Print the values of the local variables also.  This can be combined
-with a number to limit the number of frames shown.
+with the optional @var{count} to limit the number of frames shown.
 
-@item no-filters
+@item -no-filters
 Do not run Python frame filters on this backtrace.  @xref{Frame
 Filter API}, for more information.  Additionally use @ref{disable
 frame-filter all} to turn off all frame filters.  This is only
 relevant when @value{GDBN} has been configured with @code{Python}
 support.
 
-@item hide
+@item -hide
 A Python frame filter might decide to ``elide'' some frames.  Normally
 such elided frames are still printed, but they are indented relative
-to the filtered frames that cause them to be elided.  The @code{hide}
+to the filtered frames that cause them to be elided.  The @code{-hide}
 option causes elided frames to not be printed at all.
 @end table
+
+The @code{backtrace} command also supports a number of options that
+allow overriding relevant global print settings as set by @code{set
+backtrace} and @code{set print} subcommands:
+
+@table @code
+@item -past-main [@code{on}|@code{off}]
+Set whether backtraces should continue past @code{main}.  Related setting:
+@ref{set backtrace past-main}.
+
+@item -past-entry [@code{on}|@code{off}]
+Set whether backtraces should continue past the entry point of a program.
+Related setting: @ref{set backtrace past-entry}.
+
+@item -entry-values @code{no}|@code{only}|@code{preferred}|@code{if-needed}|@code{both}|@code{compact}|@code{default}
+Set printing of function arguments at function entry.
+Related setting: @ref{set print entry-values}.
+
+@item -frame-arguments @code{all}|@code{scalars}|@code{none}
+Set printing of non-scalar frame arguments.
+Related setting: @ref{set print frame-arguments}.
+
+@item -raw-frame-arguments [@code{on}|@code{off}]
+Set whether to print frame arguments in raw form.
+Related setting: @ref{set print raw-frame-arguments}.
+@end table
+
+The optional @var{qualifier} is maintained for backward compatibility.
+It can be one of the following:
+
+@table @code
+@item full
+Equivalent to the @code{-full} option.
+
+@item no-filters
+Equivalent to the @code{-no-filters} option.
+
+@item hide
+Equivalent to the @code{-hide} option.
+@end table
+
 @end table
 
 @kindex where
@@ -7591,6 +7919,7 @@ in a backtrace, you can change this behavior:
 @table @code
 @item set backtrace past-main
 @itemx set backtrace past-main on
+@anchor{set backtrace past-main}
 @kindex set backtrace
 Backtraces will continue past the user entry point.
 
@@ -7604,6 +7933,7 @@ Display the current user entry point backtrace policy.
 
 @item set backtrace past-entry
 @itemx set backtrace past-entry on
+@anchor{set backtrace past-entry}
 Backtraces will continue past the internal entry point of an application.
 This entry point is encoded by the linker when the application is built,
 and is likely before the user entry point @code{main} (or equivalent) is called.
@@ -7618,6 +7948,7 @@ Display the current internal entry point backtrace policy.
 @item set backtrace limit @var{n}
 @itemx set backtrace limit 0
 @itemx set backtrace limit unlimited
+@anchor{set backtrace limit}
 @cindex backtrace limit
 Limit the backtrace to @var{n} levels.  A value of @code{unlimited}
 or zero means unlimited levels.
@@ -7911,10 +8242,11 @@ tfaas i lo -q -t lock_something_t
 
 @node Frame Apply
 @section Applying a Command to Several Frames.
+@anchor{frame apply}
 @kindex frame apply
 @cindex apply command to several frames
 @table @code
-@item frame apply [all | @var{count} | @var{-count} | level @var{level}@dots{}] [@var{flag}]@dots{} @var{command}
+@item frame apply [all | @var{count} | @var{-count} | level @var{level}@dots{}] [@var{option}]@dots{} @var{command}
 The @code{frame apply} command allows you to apply the named
 @var{command} to one or more frames.
 
@@ -7940,23 +8272,28 @@ at levels 2, 3, 4, 6, 7, 8, and then again on frame at level 3.
 
 @end table
 
-@end table
-
 Note that the frames on which @code{frame apply} applies a command are
 also influenced by the @code{set backtrace} settings such as @code{set
-backtrace past-main} and @code{set backtrace limit N}.  See
+backtrace past-main} and @code{set backtrace limit N}.
 @xref{Backtrace,,Backtraces}.
 
-The @var{flag} arguments control what output to produce and how to handle
-errors raised when applying @var{command} to a frame.  @var{flag}
-must start with a @code{-} directly followed by one letter in
-@code{qcs}.  If several flags are provided, they must be given
-individually, such as @code{-c -q}.
+The @code{frame apply} command also supports a number of options that
+allow overriding relevant @code{set backtrace} settings:
+
+@table @code
+@item -past-main [@code{on}|@code{off}]
+Whether backtraces should continue past @code{main}.
+Related setting: @ref{set backtrace past-main}.
+
+@item -past-entry [@code{on}|@code{off}]
+Whether backtraces should continue past the entry point of a program.
+Related setting: @ref{set backtrace past-entry}.
+@end table
 
 By default, @value{GDBN} displays some frame information before the
 output produced by @var{command}, and an error raised during the
 execution of a @var{command} will abort @code{frame apply}.  The
-following flags can be used to fine-tune this behavior:
+following options can be used to fine-tune these behaviors:
 
 @table @code
 @item -c
@@ -8009,7 +8346,7 @@ $5 = (void *) 0xffffd1f0
 @end group
 @end smallexample
 
-If flag @code{-q} is given, no frame information is printed:
+If the flag @code{-q} is given, no frame information is printed:
 @smallexample
 @group
 (gdb) frame apply all -q p $sp
@@ -8018,6 +8355,8 @@ $13 = (void *) 0xffffd1f0
 (gdb)
 @end group
 @end smallexample
+
+@end table
 
 @table @code
 
@@ -8033,6 +8372,9 @@ is, using:
 @smallexample
 (@value{GDBP}) faas p some_local_var_i_do_not_remember_where_it_is
 @end smallexample
+
+The @code{faas} command accepts the same options as the @code{frame
+apply} command.  @xref{frame apply}.
 
 Note that the command @code{tfaas @var{command}} applies @var{command}
 on all frames of all threads.  See @xref{Threads,,Threads}.
@@ -9146,16 +9488,111 @@ Different Languages}).  It may also print the expression using a
 Python-based pretty-printer (@pxref{Pretty Printing}).
 
 @table @code
-@item print @var{expr}
-@itemx print /@var{f} @var{expr}
+@item print [[@var{options}] --] @var{expr}
+@itemx print [[@var{options}] --] /@var{f} @var{expr}
 @var{expr} is an expression (in the source language).  By default the
 value of @var{expr} is printed in a format appropriate to its data type;
 you can choose a different format by specifying @samp{/@var{f}}, where
 @var{f} is a letter specifying the format; see @ref{Output Formats,,Output
 Formats}.
 
-@item print
-@itemx print /@var{f}
+@anchor{print options}
+The @code{print} command supports a number of options that allow
+overriding relevant global print settings as set by @code{set print}
+subcommands:
+
+@table @code
+@item -address [@code{on}|@code{off}]
+Set printing of addresses.
+Related setting: @ref{set print address}.
+
+@item -array [@code{on}|@code{off}]
+Pretty formatting of arrays.
+Related setting: @ref{set print array}.
+
+@item -array-indexes [@code{on}|@code{off}]
+Set printing of array indexes.
+Related setting: @ref{set print array-indexes}.
+
+@item -elements @var{number-of-elements}|@code{unlimited}
+Set limit on string chars or array elements to print.  The value
+@code{unlimited} causes there to be no limit.  Related setting:
+@ref{set print elements}.
+
+@item -max-depth @var{depth}|@code{unlimited}
+Set the threshold after which nested structures are replaced with
+ellipsis.  Related setting: @ref{set print max-depth}.
+
+@item -null-stop [@code{on}|@code{off}]
+Set printing of char arrays to stop at first null char.  Related
+setting: @ref{set print null-stop}.
+
+@item -object [@code{on}|@code{off}]
+Set printing C@t{++} virtual function tables.  Related setting:
+@ref{set print object}.
+
+@item -pretty [@code{on}|@code{off}]
+Set pretty formatting of structures.  Related setting: @ref{set print
+pretty}.
+
+@item -repeats @var{number-of-repeats}|@code{unlimited}
+Set threshold for repeated print elements.  @code{unlimited} causes
+all elements to be individually printed.  Related setting: @ref{set
+print repeats}.
+
+@item -static-members [@code{on}|@code{off}]
+Set printing C@t{++} static members.  Related setting: @ref{set print
+static-members}.
+
+@item -symbol [@code{on}|@code{off}]
+Set printing of symbol names when printing pointers.  Related setting:
+@ref{set print symbol}.
+
+@item -union [@code{on}|@code{off}]
+Set printing of unions interior to structures.  Related setting:
+@ref{set print union}.
+
+@item -vtbl [@code{on}|@code{off}]
+Set printing of C++ virtual function tables.  Related setting:
+@ref{set print vtbl}.
+@end table
+
+Because the @code{print} command accepts arbitrary expressions which
+may look like options (including abbreviations), if you specify any
+command option, then you must use a double dash (@code{--}) to mark
+the end of option processing.
+
+For example, this prints the value of the @code{-r} expression:
+
+@smallexample
+(@value{GDBP}) print -r
+@end smallexample
+
+While this repeats the last value in the value history (see below)
+with the @code{-raw} option in effect:
+
+@smallexample
+(@value{GDBP}) print -r --
+@end smallexample
+
+Here is an example including both on option and an expression:
+
+@smallexample
+@group
+(@value{GDBP}) print -pretty -- *myptr
+$1 = @{
+  next = 0x0,
+  flags = @{
+    sweet = 1,
+    sour = 1
+  @},
+  meat = 0x54 "Pork"
+@}
+@end group
+@end smallexample
+
+@item print [@var{options}]
+@itemx print [@var{options}] /@var{f}
 @cindex reprint the last value
 If you omit @var{expr}, @value{GDBN} displays the last value again (from the
 @dfn{value history}; @pxref{Value History, ,Value History}).  This allows you to
@@ -10196,6 +10633,7 @@ These settings are useful for debugging programs in any language:
 
 @table @code
 @kindex set print
+@anchor{set print address}
 @item set print address
 @itemx set print address on
 @cindex print/don't print memory addresses
@@ -10307,6 +10745,7 @@ the appropriate @code{set print} options turned on.
 You can also enable @samp{/a}-like formatting all the time using
 @samp{set print symbol on}:
 
+@anchor{set print symbol}
 @table @code
 @item set print symbol on
 Tell @value{GDBN} to print the symbol corresponding to an address, if
@@ -10325,6 +10764,7 @@ address.
 Other settings control how different kinds of objects are printed:
 
 @table @code
+@anchor{set print array}
 @item set print array
 @itemx set print array on
 @cindex pretty print arrays
@@ -10339,6 +10779,7 @@ Show whether compressed or pretty format is selected for displaying
 arrays.
 
 @cindex print array indexes
+@anchor{set print array-indexes}
 @item set print array-indexes
 @itemx set print array-indexes on
 Print the index of each element when displaying arrays.  May be more
@@ -10352,6 +10793,7 @@ Stop printing element indexes when displaying arrays.
 Show whether the index of each element is printed when displaying
 arrays.
 
+@anchor{set print elements}
 @item set print elements @var{number-of-elements}
 @itemx set print elements unlimited
 @cindex number of array elements to print
@@ -10368,6 +10810,7 @@ that the number of elements to print is unlimited.
 Display the number of elements of a large array that @value{GDBN} will print.
 If the number is 0, then the printing is unlimited.
 
+@anchor{set print frame-arguments}
 @item set print frame-arguments @var{value}
 @kindex set print frame-arguments
 @cindex printing frame argument values
@@ -10417,16 +10860,17 @@ thus speeding up the display of each Ada frame.
 @item show print frame-arguments
 Show how the value of arguments should be displayed when printing a frame.
 
-@item set print raw frame-arguments on
+@anchor{set print raw-frame-arguments}
+@item set print raw-frame-arguments on
 Print frame arguments in raw, non pretty-printed, form.
 
-@item set print raw frame-arguments off
+@item set print raw-frame-arguments off
 Print frame arguments in pretty-printed form, if there is a pretty-printer
 for the value (@pxref{Pretty Printing}),
 otherwise print the value in raw form.
 This is the default.
 
-@item show print raw frame-arguments
+@item show print raw-frame-arguments
 Show whether to print frame arguments in raw form.
 
 @anchor{set print entry-values}
@@ -10544,6 +10988,7 @@ entry resolution see @ref{set debug entry-values}.
 Show the method being used for printing of frame argument values at function
 entry.
 
+@anchor{set print repeats}
 @item set print repeats @var{number-of-repeats}
 @itemx set print repeats unlimited
 @cindex repeated array elements
@@ -10560,6 +11005,66 @@ is 10.
 Display the current threshold for printing repeated identical
 elements.
 
+@anchor{set print max-depth}
+@item set print max-depth @var{depth}
+@item set print max-depth unlimited
+@cindex printing nested structures
+Set the threshold after which nested structures are replaced with
+ellipsis, this can make visualising deeply nested structures easier.
+
+For example, given this C code
+
+@smallexample
+typedef struct s1 @{ int a; @} s1;
+typedef struct s2 @{ s1 b; @} s2;
+typedef struct s3 @{ s2 c; @} s3;
+typedef struct s4 @{ s3 d; @} s4;
+
+s4 var = @{ @{ @{ @{ 3 @} @} @} @};
+@end smallexample
+
+The following table shows how different values of @var{depth} will
+effect how @code{var} is printed by @value{GDBN}:
+
+@multitable @columnfractions .3 .7
+@headitem @var{depth} setting @tab Result of @samp{p var}
+@item unlimited
+@tab @code{$1 = @{d = @{c = @{b = @{a = 3@}@}@}@}}
+@item @code{0}
+@tab @code{$1 = @{...@}}
+@item @code{1}
+@tab @code{$1 = @{d = @{...@}@}}
+@item @code{2}
+@tab @code{$1 = @{d = @{c = @{...@}@}@}}
+@item @code{3}
+@tab @code{$1 = @{d = @{c = @{b = @{...@}@}@}@}}
+@item @code{4}
+@tab @code{$1 = @{d = @{c = @{b = @{a = 3@}@}@}@}}
+@end multitable
+
+To see the contents of structures that have been hidden the user can
+either increase the print max-depth, or they can print the elements of
+the structure that are visible, for example
+
+@smallexample
+(gdb) set print max-depth 2
+(gdb) p var
+$1 = @{d = @{c = @{...@}@}@}
+(gdb) p var.d
+$2 = @{c = @{b = @{...@}@}@}
+(gdb) p var.d.c
+$3 = @{b = @{a = 3@}@}
+@end smallexample
+
+The pattern used to replace nested structures varies based on
+language, for most languages @code{@{...@}} is used, but Fortran uses
+@code{(...)}.
+
+@item show print max-depth
+Display the current threshold after which nested structures are
+replaces with ellipsis.
+
+@anchor{set print null-stop}
 @item set print null-stop
 @cindex @sc{null} elements in arrays
 Cause @value{GDBN} to stop printing the characters of an array when the first
@@ -10571,6 +11076,7 @@ The default is off.
 Show whether @value{GDBN} stops printing an array on the first
 @sc{null} character.
 
+@anchor{set print pretty}
 @item set print pretty on
 @cindex print structures in indented form
 @cindex indentation in structure display
@@ -10622,6 +11128,7 @@ international character sets, and is the default.
 @item show print sevenbit-strings
 Show whether or not @value{GDBN} is printing only seven-bit characters.
 
+@anchor{set print union}
 @item set print union on
 @cindex unions in structures, printing
 Tell @value{GDBN} to print unions which are contained in structures
@@ -10711,6 +11218,7 @@ decoding style by inspecting your program.
 @item show demangle-style
 Display the encoding style currently in use for decoding C@t{++} symbols.
 
+@anchor{set print object}
 @item set print object
 @itemx set print object on
 @cindex derived type of an object, printing
@@ -10730,6 +11238,7 @@ virtual function table.  This is the default setting.
 @item show print object
 Show whether actual, or declared, object types are displayed.
 
+@anchor{set print static-members}
 @item set print static-members
 @itemx set print static-members on
 @cindex static members of C@t{++} objects
@@ -10754,6 +11263,7 @@ Do not print static members when displaying a Pascal object.
 Show whether Pascal static members are printed or not.
 
 @c These don't work with HP ANSI C++ yet.
+@anchor{set print vtbl}
 @item set print vtbl
 @itemx set print vtbl on
 @cindex pretty print C@t{++} virtual function tables
@@ -11197,7 +11707,7 @@ For example, it will be empty before you execute the @code{run} command.
 @vindex $_tlb@r{, convenience variable}
 The variable @code{$_tlb} is automatically set when debugging
 applications running on MS-Windows in native mode or connected to
-gdbserver that supports the @code{qGetTIBAddr} request. 
+gdbserver that supports the @code{qGetTIBAddr} request.
 @xref{General Query Packets}.
 This variable contains the address of the thread information block.
 
@@ -11210,6 +11720,32 @@ The thread number of the current thread.  @xref{thread numbers}.
 
 @item $_gthread
 The global number of the current thread.  @xref{global thread numbers}.
+
+@item $_gdb_major
+@itemx $_gdb_minor
+@vindex $_gdb_major@r{, convenience variable}
+@vindex $_gdb_minor@r{, convenience variable}
+The major and minor version numbers of the running @value{GDBN}.
+Development snapshots and pretest versions have their minor version
+incremented by one; thus, @value{GDBN} pretest 9.11.90 will produce
+the value 12 for @code{$_gdb_minor}.  These variables allow you to
+write scripts that work with different versions of @value{GDBN}
+without errors caused by features unavailable in some of those
+versions.
+
+@item $_shell_exitcode
+@itemx $_shell_exitsignal
+@vindex $_shell_exitcode@r{, convenience variable}
+@vindex $_shell_exitsignal@r{, convenience variable}
+@cindex shell command, exit code
+@cindex shell command, exit signal
+@cindex exit status of shell commands
+@value{GDBN} commands such as @code{shell} and @code{|} are launching
+shell commands.  When a launched command terminates, @value{GDBN}
+automatically maintains the variables @code{$_shell_exitcode}
+and @code{$_shell_exitsignal} according to the exit status of the last
+launched command.  These variables are set and used similarly to
+the variables @code{$_exitcode} and @code{$_exitsignal}.
 
 @end table
 
@@ -11389,6 +11925,17 @@ an enumerated type:
 (gdb) printf "Visiting node of type %s\n", $_as_string(node)
 Visiting node of type NODE_INTEGER
 @end smallexample
+
+@item $_cimag(@var{value})
+@itemx $_creal(@var{value})
+@findex $_cimag@r{, convenience function}
+@findex $_creal@r{, convenience function}
+Return the imaginary (@code{$_cimag}) or real (@code{$_creal}) part of
+the complex number @var{value}.
+
+The type of the imaginary or real part depends on the type of the
+complex number, e.g., using @code{$_cimag} on a @code{float complex}
+will return an imaginary part of type @code{float}.
 
 @end table
 
@@ -17769,15 +18316,16 @@ bitfields:
 /* XXX  3-bit hole   */
 /* XXX  4-byte hole  */
 /*    8      |     8 */    int64_t a5;
-/*   16:27   |     4 */    int a6 : 5;
-/*   16:56   |     8 */    int64_t a7 : 3;
+/*   16: 0   |     4 */    int a6 : 5;
+/*   16: 5   |     8 */    int64_t a7 : 3;
+"/* XXX  7-byte padding  */
 
                            /* total size (bytes):   24 */
                          @}
 @end smallexample
 
-Note how the offset information is now extended to also include how
-many bits are left to be used in each bitfield.
+Note how the offset information is now extended to also include the
+first bit of the bitfield.
 @end table
 
 @kindex ptype
@@ -17880,8 +18428,7 @@ information.  Inspecting the type of a (global) variable for which
 of such variables.
 
 @kindex info types
-@item info types @var{regexp}
-@itemx info types
+@item info types [-q] [@var{regexp}]
 Print a brief description of all types whose names match the regular
 expression @var{regexp} (or all types in your program, if you supply
 no argument).  Each complete typename is matched as though it were a
@@ -17900,6 +18447,11 @@ the manually specified language (see @ref{Manually, ,Set Language Manually}).
 This command differs from @code{ptype} in two ways: first, like
 @code{whatis}, it does not print a detailed description; second, it
 lists all source files and line numbers where a type is defined.
+
+The output from @samp{into types} is proceeded with a header line
+describing what types are being listed.  The optional flag @samp{-q},
+which stands for @samp{quiet}, disables printing this header
+information.
 
 @kindex info type-printers
 @item info type-printers
@@ -18659,6 +19211,28 @@ the default C@t{++} exception handler and the inferior terminated.
 Show the current setting of stack unwinding in the functions called by
 @value{GDBN}.
 
+@item set may-call-functions
+@kindex set may-call-functions
+@cindex disabling calling functions in the program
+@cindex calling functions in the program, disabling
+Set permission to call functions in the program.
+This controls whether @value{GDBN} will attempt to call functions in
+the program, such as with expressions in the @code{print} command.  It
+defaults to @code{on}.
+
+To call a function in the program, @value{GDBN} has to temporarily
+modify the state of the inferior.  This has potentially undesired side
+effects.  Also, having @value{GDBN} call nested functions is likely to
+be erroneous and may even crash the program being debugged.  You can
+avoid such hazards by forbidding @value{GDBN} from calling functions
+in the program being debugged.  If calling functions in the program
+is forbidden, GDB will throw an error when a command (such as printing
+an expression) starts a function call in the program.
+
+@item show may-call-functions
+@kindex show may-call-functions
+Show permission to call functions in the program.
+
 @end table
 
 @subsection Calling functions with no debug info
@@ -18839,17 +19413,18 @@ compile file /home/user/example.c
 @end table
 
 @table @code
-@item compile print @var{expr}
-@itemx compile print /@var{f} @var{expr}
+@item compile print [[@var{options}] --] @var{expr}
+@itemx compile print [[@var{options}] --] /@var{f} @var{expr}
 Compile and execute @var{expr} with the compiler language found as the
 current language in @value{GDBN} (@pxref{Languages}).  By default the
 value of @var{expr} is printed in a format appropriate to its data type;
 you can choose a different format by specifying @samp{/@var{f}}, where
 @var{f} is a letter specifying the format; see @ref{Output Formats,,Output
-Formats}.
+Formats}.  The @code{compile print} command accepts the same options
+as the @code{print} command; see @ref{print options}.
 
-@item compile print
-@itemx compile print /@var{f}
+@item compile print [[@var{options}] --]
+@itemx compile print [[@var{options}] --] /@var{f}
 @cindex reprint the last value
 Alternatively you can enter the expression (source code producing it) as
 multiple lines of text.  To enter this mode, invoke the @samp{compile print}
@@ -19893,9 +20468,13 @@ uses two different methods of looking for the debug file:
 @item
 For the ``debug link'' method, @value{GDBN} looks up the named file in
 the directory of the executable file, then in a subdirectory of that
-directory named @file{.debug}, and finally under each one of the global debug
-directories, in a subdirectory whose name is identical to the leading
-directories of the executable's absolute file name.
+directory named @file{.debug}, and finally under each one of the
+global debug directories, in a subdirectory whose name is identical to
+the leading directories of the executable's absolute file name.  (On
+MS-Windows/MS-DOS, the drive letter of the executable's leading
+directories is converted to a one-letter subdirectory, i.e.@:
+@file{d:/usr/bin/} is converted to @file{/d/usr/bin/}, because Windows
+filesystems disallow colons in file names.)
 
 @item
 For the ``build ID'' method, @value{GDBN} looks in the
@@ -20288,6 +20867,7 @@ currently work for programs using Ada.
 
 @subsection Automatic symbol index cache
 
+@cindex automatic symbol index cache
 It is possible for @value{GDBN} to automatically save a copy of this index in a
 cache on disk and retrieve it from there when loading the same binary in the
 future.  This feature can be turned on with @kbd{set index-cache on}.  The
@@ -20295,11 +20875,13 @@ following commands can be used to tweak the behavior of the index cache.
 
 @table @code
 
+@kindex set index-cache
 @item set index-cache on
 @itemx set index-cache off
 Enable or disable the use of the symbol index cache.
 
 @item set index-cache directory @var{directory}
+@kindex show index-cache
 @itemx show index-cache directory
 Set/show the directory where index files will be saved.
 
@@ -21310,8 +21892,12 @@ The @option{--debug} option tells @code{gdbserver} to display extra
 status information about the debugging process.
 @cindex @option{--remote-debug}, @code{gdbserver} option
 The @option{--remote-debug} option tells @code{gdbserver} to display
-remote protocol debug output.  These options are intended for
-@code{gdbserver} development and for bug reports to the developers.
+remote protocol debug output.
+@cindex @option{--debug-file}, @code{gdbserver} option
+@cindex @code{gdbserver}, send all debug output to a single file
+The @option{--debug-file=@var{filename}} option tells @code{gdbserver} to
+write any debug output to the given @var{filename}.  These options are intended
+for @code{gdbserver} development and for bug reports to the developers.
 
 @cindex @option{--debug-format}, @code{gdbserver} option
 The @option{--debug-format=option1[,option2,...]} option tells
@@ -21410,6 +21996,10 @@ Disable or enable general debugging messages.
 @itemx monitor set remote-debug 1
 Disable or enable specific debugging messages associated with the remote
 protocol (@pxref{Remote Protocol}).
+
+@item monitor set debug-file filename
+@itemx monitor set debug-file
+Send any debug output to the given file, or to stderr.
 
 @item monitor set debug-format option1@r{[},option2,...@r{]}
 Specify additional text to add to debugging messages.
@@ -21608,7 +22198,7 @@ protocol.
 Record remote serial communications on the named @var{file}.  The
 default is not to record at all.
 
-@item show remotelogfile.
+@item show remotelogfile
 Show the current setting  of the file name on which to record the
 serial communications.
 
@@ -24514,8 +25104,9 @@ Show the current pagination mode.
 @kindex set style
 @kindex show style
 @value{GDBN} can style its output on a capable terminal.  This is
-enabled by default on most systems.  Various style settings are
-available; and styles can also be disabled entirely.
+enabled by default on most systems, but disabled by default when in
+batch mode (@pxref{Mode Options}).  Various style settings are available;
+and styles can also be disabled entirely.
 
 @table @code
 @item set style enabled @samp{on|off}
@@ -24524,6 +25115,16 @@ most hosts defaulting to @samp{on}.
 
 @item show style enabled
 Show the current state of styling.
+
+@item set style sources @samp{on|off}
+Enable or disable source code styling.  This affects whether source
+code, such as the output of the @code{list} command, is styled.  Note
+that source styling only works if styling in general is enabled, and
+if @value{GDBN} was linked with the GNU Source Highlight library.  The
+default is @samp{on}.
+
+@item show style sources
+Show the current state of source code styling.
 @end table
 
 Subcommands of @code{set style} control specific forms of styling.
@@ -24538,13 +25139,13 @@ For example, the style of file names can be controlled using the
 @item set style filename background @var{color}
 Set the background to @var{color}.  Valid colors are @samp{none}
 (meaning the terminal's default color), @samp{black}, @samp{red},
-@samp{green}, @samp{yellow}, @samp{vlue}, @samp{magenta}, @samp{cyan},
+@samp{green}, @samp{yellow}, @samp{blue}, @samp{magenta}, @samp{cyan},
 and@samp{white}.
 
 @item set style filename foreground @var{color}
 Set the foreground to @var{color}.  Valid colors are @samp{none}
 (meaning the terminal's default color), @samp{black}, @samp{red},
-@samp{green}, @samp{yellow}, @samp{vlue}, @samp{magenta}, @samp{cyan},
+@samp{green}, @samp{yellow}, @samp{blue}, @samp{magenta}, @samp{cyan},
 and@samp{white}.
 
 @item set style filename intensity @var{value}
@@ -24552,22 +25153,48 @@ Set the intensity to @var{value}.  Valid intensities are @samp{normal}
 (the default), @samp{bold}, and @samp{dim}.
 @end table
 
+The @code{show style} command and its subcommands are styling
+a style name in their output using its own style.
+So, use @command{show style} to see the complete list of styles,
+their characteristics and the visual aspect of each style.
+
 The style-able objects are:
 @table @code
 @item filename
-Control the styling of file names.
+Control the styling of file names.  By default, this style's
+foreground color is green.
 
 @item function
 Control the styling of function names.  These are managed with the
-@code{set style function} family of commands.
+@code{set style function} family of commands.  By default, this
+style's foreground color is yellow.
 
 @item variable
 Control the styling of variable names.  These are managed with the
-@code{set style variable} family of commands.
+@code{set style variable} family of commands.  By default, this style's
+foreground color is cyan.
 
 @item address
 Control the styling of addresses.  These are managed with the
-@code{set style address} family of commands.
+@code{set style address} family of commands.  By default, this style's
+foreground color is blue.
+
+@item title
+Control the styling of titles.  These are managed with the
+@code{set style title} family of commands.  By default, this style's
+intensity is bold.  Commands are using the title style to improve
+the readibility of large output.  For example, the commands
+@command{apropos} and @command{help} are using the title style
+for the command names.
+
+@item highlight
+Control the styling of highlightings.  These are managed with the
+@code{set style highlight} family of commands.  By default, this style's
+foreground color is red.  Commands are using the highlight style to draw
+the user attention to some specific parts of their output.  For example,
+the command @command{apropos -v REGEXP} uses the highlight style to
+mark the documentation parts matching @var{regexp}.
+
 @end table
 
 @node Numbers
@@ -26501,18 +27128,22 @@ used interpreter with @value{GDBN}. With no interpreter specified at runtime,
 
 @item mi
 @cindex mi interpreter
-The newest @sc{gdb/mi} interface (currently @code{mi2}).  Used primarily
+The newest @sc{gdb/mi} interface (currently @code{mi3}).  Used primarily
 by programs wishing to use @value{GDBN} as a backend for a debugger GUI
 or an IDE.  For more information, see @ref{GDB/MI, ,The @sc{gdb/mi}
 Interface}.
 
+@item mi3
+@cindex mi3 interpreter
+The @sc{gdb/mi} interface introduced in @value{GDBN} 9.1.
+
 @item mi2
 @cindex mi2 interpreter
-The current @sc{gdb/mi} interface.
+The @sc{gdb/mi} interface introduced in @value{GDBN} 6.0.
 
 @item mi1
 @cindex mi1 interpreter
-The @sc{gdb/mi} interface included in @value{GDBN} 5.1, 5.2, and 5.3.
+The @sc{gdb/mi} interface introduced in @value{GDBN} 5.1.
 
 @end table
 
@@ -27761,11 +28392,10 @@ recommended that front ends use the @code{-interpreter-exec} command
 The application which takes the MI output and presents the state of the
 program being debugged to the user is called a @dfn{front end}.
 
-Although @sc{gdb/mi} is still incomplete, it is currently being used
-by a variety of front ends to @value{GDBN}.  This makes it difficult
-to introduce new functionality without breaking existing usage.  This
-section tries to minimize the problems by describing how the protocol
-might change.
+Since @sc{gdb/mi} is used by a variety of front ends to @value{GDBN}, changes
+to the MI interface may break existing usage.  This section describes how the
+protocol changes and how to request previous version of the protocol when it
+does.
 
 Some changes in MI need not break a carefully designed front end, and
 for these the MI version will remain unchanged.  The following is a
@@ -27791,13 +28421,79 @@ The range of values for fields with specified values, e.g.,
 @end itemize
 
 If the changes are likely to break front ends, the MI version level
-will be increased by one.  This will allow the front end to parse the
-output according to the MI version.  Apart from mi0, new versions of
-@value{GDBN} will not support old versions of MI and it will be the
-responsibility of the front end to work with the new one.
+will be increased by one.  The new versions of the MI protocol are not compatible
+with the old versions.  Old versions of MI remain available, allowing front ends
+to keep using them until they are modified to use the latest MI version.
 
-@c Starting with mi3, add a new command -mi-version that prints the MI
-@c version?
+Since @code{--interpreter=mi} always points to the latest MI version, it is
+recommended that front ends request a specific version of MI when launching
+@value{GDBN} (e.g. @code{--interpreter=mi2}) to make sure they get an
+interpreter with the MI version they expect.
+
+The following table gives a summary of the the released versions of the MI
+interface: the version number, the version of GDB in which it first appeared
+and the breaking changes compared to the previous version.
+
+@multitable @columnfractions .05 .05 .9
+@headitem MI version @tab GDB version @tab Breaking changes
+
+@item
+@center 1
+@tab
+@center 5.1
+@tab
+None
+
+@item
+@center 2
+@tab
+@center 6.0
+@tab
+
+@itemize
+@item
+The @code{-environment-pwd}, @code{-environment-directory} and
+@code{-environment-path} commands now returns values using the MI output
+syntax, rather than CLI output syntax.
+
+@item
+@code{-var-list-children}'s @code{children} result field is now a list, rather
+than a tuple.
+
+@item
+@code{-var-update}'s @code{changelist} result field is now a list, rather than
+a tuple.
+@end itemize
+
+@item
+@center 3
+@tab
+@center 9.1
+@tab
+
+@itemize
+@item
+The output of information about multi-location breakpoints has changed in the
+responses to the @code{-break-insert} and @code{-break-info} commands, as well
+as in the @code{=breakpoint-created} and @code{=breakpoint-modified} events.
+The multiple locations are now placed in a @code{locations} field, whose value
+is a list.
+@end itemize
+
+@end multitable
+
+If your front end cannot yet migrate to a more recent version of the
+MI protocol, you can nevertheless selectively enable specific features
+available in those recent MI versions, using the following commands:
+
+@table @code
+
+@item -fix-multi-location-breakpoint-output
+Use the output for multi-location breakpoints which was introduced by
+MI 3, even when using MI versions 2 or 1.  This command has no
+effect when using MI version 3 or later.
+
+@end table
 
 The best way to avoid unexpected changes in MI that might break your front
 end is to make your project known to @value{GDBN} developers and
@@ -28127,9 +28823,7 @@ following fields:
 
 @table @code
 @item number
-The breakpoint number.  For a breakpoint that represents one location
-of a multi-location breakpoint, this will be a dotted pair, like
-@samp{1.2}.
+The breakpoint number.
 
 @item type
 The type of the breakpoint.  For ordinary breakpoints this will be
@@ -28228,6 +28922,52 @@ is not.
 
 @item what
 Some extra data, the exact contents of which are type-dependent.
+
+@item locations
+This field is present if the breakpoint has multiple locations.  It is also
+exceptionally present if the breakpoint is enabled and has a single, disabled
+location.
+
+The value is a list of locations.  The format of a location is decribed below.
+
+@end table
+
+A location in a multi-location breakpoint is represented as a tuple with the
+following fields:
+
+@table @code
+
+@item number
+The location number as a dotted pair, like @samp{1.2}.  The first digit is the
+number of the parent breakpoint.  The second digit is the number of the
+location within that breakpoint.
+
+@item enabled
+This indicates whether the location is enabled, in which case the
+value is @samp{y}, or disabled, in which case the value is @samp{n}.
+Note that this is not the same as the field @code{enable}.
+
+@item addr
+The address of this location as an hexidecimal number.
+
+@item func
+If known, the function in which the location appears.
+If not known, this field is not present.
+
+@item file
+The name of the source file which contains this location, if known.
+If not known, this field is not present.
+
+@item fullname
+The full file name of the source file which contains this location, if
+known.  If not known, this field is not present.
+
+@item line
+The line number at which this location appears, if known.
+If not known, this field is not present.
+
+@item thread-groups
+The thread groups this location is in.
 
 @end table
 
@@ -29151,6 +29891,7 @@ catchpoints.
 @menu
 * Shared Library GDB/MI Catchpoint Commands::
 * Ada Exception GDB/MI Catchpoint Commands::
+* C++ Exception GDB/MI Catchpoint Commands::
 @end menu
 
 @node Shared Library GDB/MI Catchpoint Commands
@@ -29347,6 +30088,145 @@ The corresponding @value{GDBN} command is @samp{catch handlers}.
 enabled="y",addr="0x0000000000402f68",
 what="`Constraint_Error' Ada exception handlers",thread-groups=["i1"],
 times="0",original-location="__gnat_begin_handler"@}
+(gdb)
+@end smallexample
+
+@node C++ Exception GDB/MI Catchpoint Commands
+@subsection C@t{++} Exception @sc{gdb/mi} Catchpoints
+
+The following @sc{gdb/mi} commands can be used to create catchpoints
+that stop the execution when C@t{++} exceptions are being throw, rethrown,
+or caught.
+
+@subheading The @code{-catch-throw} Command
+@findex -catch-throw
+
+@subsubheading Synopsis
+
+@smallexample
+ -catch-throw [ -t ] [ -r @var{regexp}]
+@end smallexample
+
+Stop when the debuggee throws a C@t{++} exception.  If @var{regexp} is
+given, then only exceptions whose type matches the regular expression
+will be caught.
+
+If @samp{-t} is given, then the catchpoint is enabled only for one
+stop, the catchpoint is automatically deleted after stopping once for
+the event.
+
+@subsubheading @value{GDBN} Command
+
+The corresponding @value{GDBN} commands are @samp{catch throw}
+and @samp{tcatch throw} (@pxref{Set Catchpoints}).
+
+@subsubheading Example
+
+@smallexample
+-catch-throw -r exception_type
+^done,bkpt=@{number="1",type="catchpoint",disp="keep",enabled="y",
+  what="exception throw",catch-type="throw",
+  thread-groups=["i1"],
+  regexp="exception_type",times="0"@}
+(gdb)
+-exec-run
+^running
+(gdb)
+~"\n"
+~"Catchpoint 1 (exception thrown), 0x00007ffff7ae00ed
+  in __cxa_throw () from /lib64/libstdc++.so.6\n"
+*stopped,bkptno="1",reason="breakpoint-hit",disp="keep",
+  frame=@{addr="0x00007ffff7ae00ed",func="__cxa_throw",
+  args=[],from="/lib64/libstdc++.so.6",arch="i386:x86-64"@},
+  thread-id="1",stopped-threads="all",core="6"
+(gdb)
+@end smallexample
+
+@subheading The @code{-catch-rethrow} Command
+@findex -catch-rethrow
+
+@subsubheading Synopsis
+
+@smallexample
+ -catch-rethrow [ -t ] [ -r @var{regexp}]
+@end smallexample
+
+Stop when a C@t{++} exception is re-thrown.  If @var{regexp} is given,
+then only exceptions whose type matches the regular expression will be
+caught.
+
+If @samp{-t} is given, then the catchpoint is enabled only for one
+stop, the catchpoint is automatically deleted after the first event is
+caught.
+
+@subsubheading @value{GDBN} Command
+
+The corresponding @value{GDBN} commands are @samp{catch rethrow}
+and @samp{tcatch rethrow} (@pxref{Set Catchpoints}).
+
+@subsubheading Example
+
+@smallexample
+-catch-rethrow -r exception_type
+^done,bkpt=@{number="1",type="catchpoint",disp="keep",enabled="y",
+  what="exception rethrow",catch-type="rethrow",
+  thread-groups=["i1"],
+  regexp="exception_type",times="0"@}
+(gdb)
+-exec-run
+^running
+(gdb)
+~"\n"
+~"Catchpoint 1 (exception rethrown), 0x00007ffff7ae00ed
+  in __cxa_rethrow () from /lib64/libstdc++.so.6\n"
+*stopped,bkptno="1",reason="breakpoint-hit",disp="keep",
+  frame=@{addr="0x00007ffff7ae00ed",func="__cxa_rethrow",
+  args=[],from="/lib64/libstdc++.so.6",arch="i386:x86-64"@},
+  thread-id="1",stopped-threads="all",core="6"
+(gdb)
+@end smallexample
+
+@subheading The @code{-catch-catch} Command
+@findex -catch-catch
+
+@subsubheading Synopsis
+
+@smallexample
+ -catch-catch [ -t ] [ -r @var{regexp}]
+@end smallexample
+
+Stop when the debuggee catches a C@t{++} exception.  If @var{regexp}
+is given, then only exceptions whose type matches the regular
+expression will be caught.
+
+If @samp{-t} is given, then the catchpoint is enabled only for one
+stop, the catchpoint is automatically deleted after the first event is
+caught.
+
+@subsubheading @value{GDBN} Command
+
+The corresponding @value{GDBN} commands are @samp{catch catch}
+and @samp{tcatch catch} (@pxref{Set Catchpoints}).
+
+@subsubheading Example
+
+@smallexample
+-catch-catch -r exception_type
+^done,bkpt=@{number="1",type="catchpoint",disp="keep",enabled="y",
+  what="exception catch",catch-type="catch",
+  thread-groups=["i1"],
+  regexp="exception_type",times="0"@}
+(gdb)
+-exec-run
+^running
+(gdb)
+~"\n"
+~"Catchpoint 1 (exception caught), 0x00007ffff7ae00ed
+  in __cxa_begin_catch () from /lib64/libstdc++.so.6\n"
+*stopped,bkptno="1",reason="breakpoint-hit",disp="keep",
+  frame=@{addr="0x00007ffff7ae00ed",func="__cxa_begin_catch",
+  args=[],from="/lib64/libstdc++.so.6",arch="i386:x86-64"@},
+  thread-id="1",stopped-threads="all",core="6"
 (gdb)
 @end smallexample
 
@@ -34280,6 +35160,71 @@ fullname="/home/nickrob/myprog.c",line="73",arch="i386:x86_64"@}
 (gdb)
 @end smallexample
 
+@subheading The @code{-complete} Command
+@findex -complete
+
+@subheading Synopsis
+
+@smallexample
+-complete @var{command}
+@end smallexample
+
+Show a list of completions for partially typed CLI @var{command}.
+
+This command is intended for @sc{gdb/mi} frontends that cannot use two separate
+CLI and MI channels --- for example: because of lack of PTYs like on Windows or
+because @value{GDBN} is used remotely via a SSH connection.
+
+@subheading Result
+
+The result consists of two or three fields:
+
+@table @samp
+@item completion
+This field contains the completed @var{command}.  If @var{command}
+has no known completions, this field is omitted.
+
+@item matches
+This field contains a (possibly empty) array of matches.  It is always present.
+
+@item max_completions_reached
+This field contains @code{1} if number of known completions is above
+@code{max-completions} limit (@pxref{Completion}), otherwise it contains
+@code{0}.  It is always present.
+
+@end table
+
+@subheading @value{GDBN} Command
+
+The corresponding @value{GDBN} command is @samp{complete}.
+
+@subheading Example
+
+@smallexample
+(gdb)
+-complete br
+^done,completion="break",
+      matches=["break","break-range"],
+      max_completions_reached="0"
+(gdb)
+-complete "b ma"
+^done,completion="b ma",
+      matches=["b madvise","b main"],max_completions_reached="0"
+(gdb)
+-complete "b push_b"
+^done,completion="b push_back(",
+      matches=[
+       "b A::push_back(void*)",
+       "b std::string::push_back(char)",
+       "b std::vector<int, std::allocator<int> >::push_back(int&&)"],
+      max_completions_reached="0"
+(gdb)
+-complete "nonexist"
+^done,matches=[],max_completions_reached="0"
+(gdb)
+
+@end smallexample
+
 @node Annotations
 @chapter @value{GDBN} Annotations
 
@@ -35937,7 +36882,7 @@ libpython is present and found at configure time.)  Python makes
 @value{GDBN} scripting much more powerful than the restricted CLI
 scripting language.  If your host does not have Python installed, you
 can find it on `http://www.python.org/download/'.  The oldest version
-of Python supported by GDB is 2.4.  The optional argument @var{python}
+of Python supported by GDB is 2.6.  The optional argument @var{python}
 is used to find the Python headers and libraries.  It can be either
 the name of a Python executable, or the name of the directory in which
 Python is installed.
@@ -36532,7 +37477,7 @@ print a message showing how many tests were run, and how many failed.
 If a @var{filter} is passed, only the tests with @var{filter} in their
 name will by ran.
 
-@kindex "maint info selftests"
+@kindex maint info selftests
 @cindex self tests
 @item maint info selftests
 List the selftests compiled in to @value{GDBN}.
@@ -36757,6 +37702,41 @@ command also allows to find symbols in other sections.
 If section was not specified, the section in which the symbol was found
 is also printed.  For dynamically linked executables, the name of
 executable or shared library containing the symbol is printed as well.
+
+@kindex maint test-options
+@item maint test-options require-delimiter
+@itemx maint test-options unknown-is-error
+@itemx maint test-options unknown-is-operand
+These commands are used by the testsuite to validate the command
+options framework.  The @code{require-delimiter} variant requires a
+double-dash delimiter to indicate end of options.  The
+@code{unknown-is-error} and @code{unknown-is-operand} do not.  The
+@code{unknown-is-error} variant throws an error on unknown option,
+while @code{unknown-is-operand} treats unknown options as the start of
+the command's operands.  When run, the commands output the result of
+the processed options.  When completed, the commands store the
+internal result of completion in a variable exposed by the @code{maint
+show test-options-completion-result} command.
+
+@kindex maint show test-options-completion-result
+@item maint show test-options-completion-result
+Shows the result of completing the @code{maint test-options}
+subcommands.  This is used by the testsuite to validate completion
+support in the command options framework.
+
+@kindex maint set test-settings
+@kindex maint show test-settings
+@item maint set test-settings @var{kind}
+@itemx maint show test-settings @var{kind}
+These are representative commands for each @var{kind} of setting type
+@value{GDBN} supports.  They are used by the testsuite for exercising
+the settings infrastructure.
+
+@kindex maint with
+@item maint with @var{setting} [@var{value}] [-- @var{command}]
+Like the @code{with} command, but works with @code{maintenance set}
+variables.  This is used by the testsuite to exercise the @code{with}
+command's infrastructure.
 
 @end table
 
@@ -43034,6 +44014,9 @@ The @samp{org.gnu.gdb.aarch64.sve} feature is optional.  If present,
 it should contain registers @samp{z0} through @samp{z31}, @samp{p0}
 through @samp{p15}, @samp{ffr} and @samp{vg}.
 
+The @samp{org.gnu.gdb.aarch64.pauth} feature is optional.  If present,
+it should contain registers @samp{pauth_dmask} and @samp{pauth_cmask}.
+
 @node ARC Features
 @subsection ARC Features
 @cindex target descriptions, ARC Features
@@ -43322,8 +44305,10 @@ The @samp{org.gnu.gdb.power.fpu} feature is optional.  It should
 contain registers @samp{f0} through @samp{f31} and @samp{fpscr}.
 
 The @samp{org.gnu.gdb.power.altivec} feature is optional.  It should
-contain registers @samp{vr0} through @samp{vr31}, @samp{vscr},
-and @samp{vrsave}.
+contain registers @samp{vr0} through @samp{vr31}, @samp{vscr}, and
+@samp{vrsave}.  @value{GDBN} will define pseudo-registers @samp{v0}
+through @samp{v31} as aliases for the corresponding @samp{vrX}
+registers.
 
 The @samp{org.gnu.gdb.power.vsx} feature is optional.  It should
 contain registers @samp{vs0h} through @samp{vs31h}.  @value{GDBN} will
@@ -43984,8 +44969,8 @@ You can also start with both an executable program and a core file specified:
 gdb program core
 @end smallexample
 
-You can, instead, specify a process ID as a second argument, if you want
-to debug a running process:
+You can, instead, specify a process ID as a second argument or use option
+@code{-p}, if you want to debug a running process:
 
 @smallexample
 gdb program 1234
@@ -43993,9 +44978,8 @@ gdb -p 1234
 @end smallexample
 
 @noindent
-would attach @value{GDBN} to process @code{1234} (unless you also have a file
-named @file{1234}; @value{GDBN} does check for a core file first).
-With option @option{-p} you can omit the @var{program} filename.
+would attach @value{GDBN} to process @code{1234}.  With option @option{-p} you
+can omit the @var{program} filename.
 
 Here are some of the most frequently needed @value{GDBN} commands:
 
@@ -44405,6 +45389,11 @@ the developers.
 
 @item --remote-debug
 Instruct @code{gdbserver} to display remote protocol debug output.
+This option is intended for @code{gdbserver} development and for bug reports to
+the developers.
+
+@item --debug-file=@var{filename}
+Instruct @code{gdbserver} to send any debug output to the given @var{filename}.
 This option is intended for @code{gdbserver} development and for bug reports to
 the developers.
 

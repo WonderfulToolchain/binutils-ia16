@@ -93,12 +93,11 @@ const struct extension_language_defn extension_language_python =
 #include "python-internal.h"
 #include "linespec.h"
 #include "source.h"
-#include "version.h"
+#include "gdbsupport/version.h"
 #include "target.h"
 #include "gdbthread.h"
 #include "interps.h"
 #include "event-top.h"
-#include "py-ref.h"
 #include "py-event.h"
 
 /* True if Python has been successfully initialized, false
@@ -498,15 +497,14 @@ gdbpy_parameter (PyObject *self, PyObject *args)
 
   std::string newarg = std::string ("show ") + arg;
 
-  TRY
+  try
     {
       found = lookup_cmd_composition (newarg.c_str (), &alias, &prefix, &cmd);
     }
-  CATCH (ex, RETURN_MASK_ALL)
+  catch (const gdb_exception &ex)
     {
       GDB_PY_HANDLE_EXCEPTION (ex);
     }
-  END_CATCH
 
   if (!found)
     return PyErr_Format (PyExc_RuntimeError,
@@ -575,8 +573,10 @@ execute_gdb_command (PyObject *self, PyObject *args, PyObject *kw)
 
   scoped_restore preventer = prevent_dont_repeat ();
 
-  TRY
+  try
     {
+      gdbpy_allow_threads allow_threads;
+
       struct interp *interp;
 
       std::string arg_copy = arg;
@@ -614,11 +614,10 @@ execute_gdb_command (PyObject *self, PyObject *args, PyObject *kw)
       /* Do any commands attached to breakpoint we stopped at.  */
       bpstat_do_actions ();
     }
-  CATCH (except, RETURN_MASK_ALL)
+  catch (const gdb_exception &except)
     {
       GDB_PY_HANDLE_EXCEPTION (except);
     }
-  END_CATCH
 
   if (to_string)
     return PyString_FromString (to_string_res.c_str ());
@@ -829,7 +828,7 @@ gdbpy_decode_line (PyObject *self, PyObject *args)
   std::vector<symtab_and_line> decoded_sals;
   symtab_and_line def_sal;
   gdb::array_view<symtab_and_line> sals;
-  TRY
+  try
     {
       if (location != NULL)
 	{
@@ -843,13 +842,12 @@ gdbpy_decode_line (PyObject *self, PyObject *args)
 	  sals = def_sal;
 	}
     }
-  CATCH (ex, RETURN_MASK_ALL)
+  catch (const gdb_exception &ex)
     {
       /* We know this will always throw.  */
       gdbpy_convert_exception (ex);
       return NULL;
     }
-  END_CATCH
 
   if (!sals.empty ())
     {
@@ -897,15 +895,15 @@ gdbpy_parse_and_eval (PyObject *self, PyObject *args)
   if (!PyArg_ParseTuple (args, "s", &expr_str))
     return NULL;
 
-  TRY
+  try
     {
+      gdbpy_allow_threads allow_threads;
       result = parse_and_eval (expr_str);
     }
-  CATCH (except, RETURN_MASK_ALL)
+  catch (const gdb_exception &except)
     {
       GDB_PY_HANDLE_EXCEPTION (except);
     }
-  END_CATCH
 
   return value_to_value_object (result);
 }
@@ -1134,7 +1132,7 @@ gdbpy_write (PyObject *self, PyObject *args, PyObject *kw)
 					&stream_type))
     return NULL;
 
-  TRY
+  try
     {
       switch (stream_type)
         {
@@ -1152,11 +1150,10 @@ gdbpy_write (PyObject *self, PyObject *args, PyObject *kw)
           fprintf_filtered (gdb_stdout, "%s", arg);
         }
     }
-  CATCH (except, RETURN_MASK_ALL)
+  catch (const gdb_exception &except)
     {
       GDB_PY_HANDLE_EXCEPTION (except);
     }
-  END_CATCH
 
   Py_RETURN_NONE;
 }
@@ -1222,14 +1219,13 @@ gdbpy_print_stack (void)
       /* PyErr_Print doesn't necessarily end output with a newline.
 	 This works because Python's stdout/stderr is fed through
 	 printf_filtered.  */
-      TRY
+      try
 	{
 	  begin_line ();
 	}
-      CATCH (except, RETURN_MASK_ALL)
+      catch (const gdb_exception &except)
 	{
 	}
-      END_CATCH
     }
   /* Print "message", just error print message.  */
   else
@@ -1243,7 +1239,7 @@ gdbpy_print_stack (void)
       if (msg != NULL)
 	type = fetched_error.type_to_string ();
 
-      TRY
+      try
 	{
 	  if (msg == NULL || type == NULL)
 	    {
@@ -1258,10 +1254,9 @@ gdbpy_print_stack (void)
 	    fprintf_filtered (gdb_stderr, "Python Exception %s %s: \n",
 			      type.get (), msg.get ());
 	}
-      CATCH (except, RETURN_MASK_ALL)
+      catch (const gdb_exception &except)
 	{
 	}
-      END_CATCH
     }
 }
 
@@ -1607,7 +1602,7 @@ do_start_initialization ()
   std::string oldloc = setlocale (LC_ALL, NULL);
   setlocale (LC_ALL, "");
   progsize = strlen (progname.get ());
-  progname_copy = (wchar_t *) PyMem_Malloc ((progsize + 1) * sizeof (wchar_t));
+  progname_copy = (wchar_t *) xmalloc ((progsize + 1) * sizeof (wchar_t));
   if (!progname_copy)
     {
       fprintf (stderr, "out of memory\n");
@@ -1644,12 +1639,10 @@ do_start_initialization ()
   if (gdb_module == NULL)
     return false;
 
-  /* The casts to (char*) are for python 2.4.  */
-  if (PyModule_AddStringConstant (gdb_module, "VERSION", (char*) version) < 0
-      || PyModule_AddStringConstant (gdb_module, "HOST_CONFIG",
-				     (char*) host_name) < 0
+  if (PyModule_AddStringConstant (gdb_module, "VERSION", version) < 0
+      || PyModule_AddStringConstant (gdb_module, "HOST_CONFIG", host_name) < 0
       || PyModule_AddStringConstant (gdb_module, "TARGET_CONFIG",
-				     (char*) target_name) < 0)
+				     target_name) < 0)
     return false;
 
   /* Add stream constants.  */
@@ -1766,8 +1759,7 @@ argument, and if the command is an expression, the result will be\n\
 printed.  For example:\n\
 \n\
     (gdb) python-interactive 2 + 3\n\
-    5\n\
-")
+    5")
 #else /* HAVE_PYTHON */
 	   _("\
 Start a Python interactive prompt.\n\
@@ -1883,7 +1875,7 @@ do_finish_initialization (const struct extension_language_defn *extlang)
       warning (_("\n"
 		 "Could not load the Python gdb module from `%s'.\n"
 		 "Limited Python support is available from the _gdb module.\n"
-		 "Suggest passing --data-directory=/path/to/gdb/data-directory.\n"),
+		 "Suggest passing --data-directory=/path/to/gdb/data-directory."),
 	       gdb_pythondir.c_str ());
       /* We return "success" here as we've already emitted the
 	 warning.  */

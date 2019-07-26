@@ -357,6 +357,7 @@ enum command_line_switch
   OPTION_STRIP_UNNEEDED_SYMBOLS,
   OPTION_SUBSYSTEM,
   OPTION_UPDATE_SECTION,
+  OPTION_VERILOG_DATA_WIDTH,
   OPTION_WEAKEN,
   OPTION_WEAKEN_SYMBOLS,
   OPTION_WRITABLE_TEXT
@@ -493,6 +494,7 @@ static struct option copy_options[] =
   {"target", required_argument, 0, 'F'},
   {"update-section", required_argument, 0, OPTION_UPDATE_SECTION},
   {"verbose", no_argument, 0, 'v'},
+  {"verilog-data-width", required_argument, 0, OPTION_VERILOG_DATA_WIDTH},
   {"version", no_argument, 0, 'V'},
   {"weaken", no_argument, 0, OPTION_WEAKEN},
   {"weaken-symbol", required_argument, 0, 'W'},
@@ -518,6 +520,11 @@ extern unsigned int _bfd_srec_len;
    This variable is defined in bfd/srec.c and can be toggled
    on by the --srec-forceS3 command line switch.  */
 extern bfd_boolean _bfd_srec_forceS3;
+
+/* Width of data in bytes for verilog output.
+   This variable is declared in bfd/verilog.c and can be modified by
+   the --verilog-data-width parameter.  */
+extern unsigned int VerilogDataWidth;
 
 /* Forward declarations.  */
 static void setup_section (bfd *, asection *, void *);
@@ -653,6 +660,7 @@ copy_usage (FILE *stream, int exit_status)
      --decompress-debug-sections   Decompress DWARF debug sections using zlib\n\
      --elf-stt-common=[yes|no]     Generate ELF common symbols with STT_COMMON\n\
                                      type\n\
+     --verilog-data-width <number> Specifies data width, in bytes, for verilog output\n\
   -M  --merge-notes                Remove redundant entries in note sections\n\
       --no-merge-notes             Do not attempt to remove redundant notes (default)\n\
   -v --verbose                     List all object files modified\n\
@@ -3276,6 +3284,27 @@ copy_archive (bfd *ibfd, bfd *obfd, const char *output_target,
   char *dir;
   const char *filename;
 
+  /* PR 24281: It is not clear what should happen when copying a thin archive.
+     One part is straight forward - if the output archive is in a different
+     directory from the input archive then any relative paths in the library
+     should be adjusted to the new location.  But if any transformation
+     options are active (eg strip, rename, add, etc) then the implication is
+     that these should be applied to the files pointed to by the archive.
+     But since objcopy is not destructive, this means that new files must be
+     created, and there is no guidance for the names of the new files.  (Plus
+     this conflicts with one of the goals of thin libraries - only taking up
+     a  minimal amount of space in the file system).
+
+     So for now we fail if an attempt is made to copy such libraries.  */
+  if (ibfd->is_thin_archive)
+    {
+      status = 1;
+      bfd_set_error (bfd_error_invalid_operation);
+      bfd_nonfatal_message (NULL, ibfd, NULL,
+			    _("sorry: copying thin archives is not currently supported"));
+      return;
+    }
+
   /* Make a temp directory to hold the contents.  */
   dir = make_tempdir (bfd_get_filename (obfd));
   if (dir == NULL)
@@ -4389,8 +4418,7 @@ strip_main (int argc, char *argv[])
   int c;
   int i;
   char *output_file = NULL;
-
-  merge_notes = TRUE;
+  bfd_boolean merge_notes_set = FALSE;
 
   while ((c = getopt_long (argc, argv, "I:O:F:K:MN:R:o:sSpdgxXHhVvwDU",
 			   strip_options, (int *) 0)) != EOF)
@@ -4431,9 +4459,11 @@ strip_main (int argc, char *argv[])
 	  break;
 	case 'M':
 	  merge_notes = TRUE;
+	  merge_notes_set = TRUE;
 	  break;
 	case OPTION_NO_MERGE_NOTES:
 	  merge_notes = FALSE;
+	  merge_notes_set = TRUE;
 	  break;
 	case 'N':
 	  add_specific_symbol (optarg, strip_specific_htab);
@@ -4484,6 +4514,16 @@ strip_main (int argc, char *argv[])
 	  strip_usage (stderr, 1);
 	}
     }
+
+  /* If the user has not expressly chosen to merge/not-merge ELF notes
+     then enable the merging unless we are stripping debug or dwo info.  */
+  if (! merge_notes_set
+      && (strip_symbols == STRIP_UNDEF
+	  || strip_symbols == STRIP_ALL
+	  || strip_symbols == STRIP_UNNEEDED
+	  || strip_symbols == STRIP_NONDEBUG
+	  || strip_symbols == STRIP_NONDWO))
+    merge_notes = TRUE;
 
   if (formats_info)
     {
@@ -5444,6 +5484,12 @@ copy_main (int argc, char *argv[])
 			     optarg);
 	      }
 	  }
+	  break;
+
+	case OPTION_VERILOG_DATA_WIDTH:
+	  VerilogDataWidth = parse_vma (optarg, "--verilog-data-width");
+	  if (VerilogDataWidth < 1)
+	    fatal (_("verilog data width must be at least 1 byte"));
 	  break;
 
 	case 0:

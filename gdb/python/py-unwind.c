@@ -28,7 +28,6 @@
 #include "regcache.h"
 #include "valprint.h"
 #include "user-regs.h"
-#include "py-ref.h"
 
 #define TRACE_PY_UNWIND(level, args...) if (pyuw_debug >= level)  \
   { fprintf_unfiltered (gdb_stdlog, args); }
@@ -142,7 +141,7 @@ pyuw_value_obj_to_pointer (PyObject *pyo_value, CORE_ADDR *addr)
   int rc = 0;
   struct value *value;
 
-  TRY
+  try
     {
       if ((value = value_object_to_value (pyo_value)) != NULL)
         {
@@ -151,11 +150,10 @@ pyuw_value_obj_to_pointer (PyObject *pyo_value, CORE_ADDR *addr)
           rc = 1;
         }
     }
-  CATCH (except, RETURN_MASK_ALL)
+  catch (const gdb_exception &except)
     {
       gdbpy_convert_exception (except);
     }
-  END_CATCH
   return rc;
 }
 
@@ -212,16 +210,15 @@ unwind_infopy_str (PyObject *self)
         stb.printf ("%s(%d, ", sep, reg.number);
         if (value != NULL)
           {
-            TRY
+            try
               {
                 value_print (value, &stb, &opts);
                 stb.puts (")");
               }
-            CATCH (except, RETURN_MASK_ALL)
+            catch (const gdb_exception &except)
               {
                 GDB_PY_HANDLE_EXCEPTION (except);
               }
-            END_CATCH
           }
         else
           stb.puts ("<BAD>)");
@@ -347,16 +344,15 @@ pending_framepy_str (PyObject *self)
 
   if (frame == NULL)
     return PyString_FromString ("Stale PendingFrame instance");
-  TRY
+  try
     {
       sp_str = core_addr_to_string_nz (get_frame_sp (frame));
       pc_str = core_addr_to_string_nz (get_frame_pc (frame));
     }
-  CATCH (except, RETURN_MASK_ALL)
+  catch (const gdb_exception &except)
     {
       GDB_PY_HANDLE_EXCEPTION (except);
     }
-  END_CATCH
 
   return PyString_FromFormat ("SP=%s,PC=%s", sp_str, pc_str);
 }
@@ -386,7 +382,7 @@ pending_framepy_read_register (PyObject *self, PyObject *args)
       return NULL;
     }
 
-  TRY
+  try
     {
       /* Fetch the value associated with a register, whether it's
 	 a real register or a so called "user" register, like "pc",
@@ -399,11 +395,10 @@ pending_framepy_read_register (PyObject *self, PyObject *args)
                       "Cannot read register %d from frame.",
                       regnum);
     }
-  CATCH (except, RETURN_MASK_ALL)
+  catch (const gdb_exception &except)
     {
       GDB_PY_HANDLE_EXCEPTION (except);
     }
-  END_CATCH
 
   return val == NULL ? NULL : value_to_value_object (val);
 }

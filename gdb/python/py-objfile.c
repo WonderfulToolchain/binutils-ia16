@@ -24,7 +24,6 @@
 #include "language.h"
 #include "build-id.h"
 #include "symtab.h"
-#include "py-ref.h"
 
 typedef struct
 {
@@ -131,15 +130,14 @@ objfpy_get_build_id (PyObject *self, void *closure)
 
   OBJFPY_REQUIRE_VALID (obj);
 
-  TRY
+  try
     {
       build_id = build_id_bfd_get (objfile->obfd);
     }
-  CATCH (except, RETURN_MASK_ALL)
+  catch (const gdb_exception &except)
     {
       GDB_PY_HANDLE_EXCEPTION (except);
     }
-  END_CATCH
 
   if (build_id != NULL)
     {
@@ -408,7 +406,7 @@ objfpy_is_valid (PyObject *self, PyObject *args)
   Py_RETURN_TRUE;
 }
 
-/* Implementation of gdb.Objfile.add_separate_debug_file (self) -> Boolean.  */
+/* Implementation of gdb.Objfile.add_separate_debug_file (self, string). */
 
 static PyObject *
 objfpy_add_separate_debug_file (PyObject *self, PyObject *args, PyObject *kw)
@@ -422,17 +420,16 @@ objfpy_add_separate_debug_file (PyObject *self, PyObject *args, PyObject *kw)
   if (!gdb_PyArg_ParseTupleAndKeywords (args, kw, "s", keywords, &file_name))
     return NULL;
 
-  TRY
+  try
     {
       gdb_bfd_ref_ptr abfd (symfile_bfd_open (file_name));
 
       symbol_file_add_separate (abfd.get (), file_name, 0, obj->objfile);
     }
-  CATCH (except, RETURN_MASK_ALL)
+  catch (const gdb_exception &except)
     {
       GDB_PY_HANDLE_EXCEPTION (except);
     }
-  END_CATCH
 
   Py_RETURN_NONE;
 }
@@ -501,7 +498,7 @@ objfpy_build_id_matches (const struct bfd_build_id *build_id,
 static struct objfile *
 objfpy_lookup_objfile_by_name (const char *name)
 {
-  for (objfile *objfile : all_objfiles (current_program_space))
+  for (objfile *objfile : current_program_space->objfiles ())
     {
       const char *filename;
 
@@ -527,7 +524,7 @@ objfpy_lookup_objfile_by_name (const char *name)
 static struct objfile *
 objfpy_lookup_objfile_by_build_id (const char *build_id)
 {
-  for (objfile *objfile : all_objfiles (current_program_space))
+  for (objfile *objfile : current_program_space->objfiles ())
     {
       const struct bfd_build_id *obfd_build_id;
 

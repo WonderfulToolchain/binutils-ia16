@@ -17,8 +17,8 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#ifndef MI_OUT_H
-#define MI_OUT_H 1
+#ifndef MI_MI_OUT_H
+#define MI_MI_OUT_H
 
 #include <vector>
 
@@ -52,8 +52,11 @@ protected:
 
   virtual void do_begin (ui_out_type type, const char *id) override;
   virtual void do_end (ui_out_type type) override;
-  virtual void do_field_int (int fldno, int width, ui_align align,
-			  const char *fldname, int value) override;
+  virtual void do_field_signed (int fldno, int width, ui_align align,
+				const char *fldname, LONGEST value) override;
+  virtual void do_field_unsigned (int fldno, int width, ui_align align,
+				  const char *fldname, ULONGEST value)
+    override;
   virtual void do_field_skip (int fldno, int width, ui_align align,
 			   const char *fldname) override;
   virtual void do_field_string (int fldno, int width, ui_align align,
@@ -90,9 +93,14 @@ private:
   std::vector<ui_file *> m_streams;
 };
 
-mi_ui_out *mi_out_new (int mi_version);
+/* Create an MI ui-out object with MI version MI_VERSION, which should be equal
+   to one of the INTERP_MI* constants (see interps.h).
+
+   Return nullptr if an invalid version is provided.  */
+mi_ui_out *mi_out_new (const char *mi_version);
+
 int mi_version (ui_out *uiout);
 void mi_out_put (ui_out *uiout, struct ui_file *stream);
 void mi_out_rewind (ui_out *uiout);
 
-#endif /* MI_OUT_H */
+#endif /* MI_MI_OUT_H */

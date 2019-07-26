@@ -27,9 +27,9 @@
 
 #include <sys/types.h>
 #include <sys/socket.h>
-#include "gdb_sys_time.h"
+#include "gdbsupport/gdb_sys_time.h"
 #include <fcntl.h>
-#include "filestuff.h"
+#include "gdbsupport/filestuff.h"
 
 #include <signal.h>
 

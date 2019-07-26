@@ -1371,8 +1371,8 @@ convert_branch:
 		}
 	      else
 		{
-		  nop = link_info->call_nop_byte;
-		  if (link_info->call_nop_as_suffix)
+		  nop = htab->params->call_nop_byte;
+		  if (htab->params->call_nop_as_suffix)
 		    {
 		      nop_offset = roff + 3;
 		      irel->r_offset -= 1;
@@ -1603,10 +1603,6 @@ elf_i386_check_relocs (bfd *abfd,
 
 	  /* It is referenced by a non-shared object. */
 	  h->ref_regular = 1;
-
-	  if (h->type == STT_GNU_IFUNC)
-	    elf_tdata (info->output_bfd)->has_gnu_symbols
-	      |= elf_gnu_symbol_ifunc;
 	}
 
       if (r_type == R_386_GOT32X
@@ -1936,9 +1932,7 @@ do_size:
 	  /* This relocation describes which C++ vtable entries are actually
 	     used.  Record for later use during GC.  */
 	case R_386_GNU_VTENTRY:
-	  BFD_ASSERT (h != NULL);
-	  if (h != NULL
-	      && !bfd_elf_gc_record_vtentry (abfd, sec, h, rel->r_offset))
+	  if (!bfd_elf_gc_record_vtentry (abfd, sec, h, rel->r_offset))
 	    goto error_return;
 	  break;
 

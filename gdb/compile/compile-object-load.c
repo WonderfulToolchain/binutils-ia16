@@ -50,16 +50,15 @@ munmap_list::~munmap_list ()
 {
   for (auto &item : items)
     {
-      TRY
+      try
 	{
 	  gdbarch_infcall_munmap (target_gdbarch (), item.addr, item.size);
 	}
-      CATCH (ex, RETURN_MASK_ERROR)
+      catch (const gdb_exception_error &ex)
 	{
 	  /* There's not much the user can do, so just ignore
 	     this.  */
 	}
-      END_CATCH
     }
 }
 
@@ -640,6 +639,7 @@ compile_object_load (const compile_file_names &file_names,
   objfile = objfile_holder.get ();
 
   func_sym = lookup_global_symbol_from_objfile (objfile,
+						GLOBAL_BLOCK,
 						GCC_FE_WRAPPER_FUNCTION,
 						VAR_DOMAIN).symbol;
   if (func_sym == NULL)

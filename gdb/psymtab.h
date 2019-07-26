@@ -22,13 +22,10 @@
 
 #include "gdb_obstack.h"
 #include "symfile.h"
-#include "common/next-iterator.h"
+#include "gdbsupport/next-iterator.h"
+#include "bcache.h"
 
 struct partial_symbol;
-
-/* A bcache for partial symbols.  */
-
-struct psymbol_bcache;
 
 /* An instance of this class manages the partial symbol tables and
    partial symbols for a given objfile.
@@ -92,6 +89,16 @@ public:
 
   struct partial_symtab *allocate_psymtab ();
 
+  typedef next_adapter<struct partial_symtab> partial_symtab_range;
+
+  /* A range adapter that makes it possible to iterate over all
+     psymtabs in one objfile.  */
+
+  partial_symtab_range range ()
+  {
+    return partial_symtab_range (psymtabs);
+  }
+
 
   /* Each objfile points to a linked list of partial symtabs derived from
      this file, one partial symtab structure for each compilation unit
@@ -109,7 +116,7 @@ public:
   /* A byte cache where we can stash arbitrary "chunks" of bytes that
      will not change.  */
 
-  struct psymbol_bcache *psymbol_cache;
+  struct bcache psymbol_cache;
 
   /* Vectors of all partial symbols read in from file.  The actual data
      is stored in the objfile_obstack.  */
@@ -130,10 +137,6 @@ private:
 };
 
 
-extern struct psymbol_bcache *psymbol_bcache_init (void);
-extern void psymbol_bcache_free (struct psymbol_bcache *);
-extern struct bcache *psymbol_bcache_get_bcache (struct psymbol_bcache *);
-
 extern const struct quick_symbol_functions psym_functions;
 
 extern const struct quick_symbol_functions dwarf2_gdb_index_functions;
@@ -144,8 +147,7 @@ extern const struct quick_symbol_functions dwarf2_debug_names_functions;
    are loaded.  This function returns a range adapter suitable for
    iterating over the psymtabs of OBJFILE.  */
 
-class objfile_psymtabs;
-extern objfile_psymtabs require_partial_symbols (struct objfile *objfile,
-						 int verbose);
+extern psymtab_storage::partial_symtab_range require_partial_symbols
+    (struct objfile *objfile, int verbose);
 
 #endif /* PSYMTAB_H */

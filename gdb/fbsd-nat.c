@@ -18,14 +18,15 @@
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
 #include "defs.h"
-#include "byte-vector.h"
+#include "gdbsupport/byte-vector.h"
 #include "gdbcore.h"
 #include "inferior.h"
 #include "regcache.h"
 #include "regset.h"
+#include "gdbarch.h"
 #include "gdbcmd.h"
 #include "gdbthread.h"
-#include "gdb_wait.h"
+#include "gdbsupport/gdb_wait.h"
 #include "inf-ptrace.h"
 #include <sys/types.h>
 #include <sys/procfs.h>
@@ -37,7 +38,7 @@
 #include <libutil.h>
 #endif
 #if !defined(HAVE_KINFO_GETVMMAP)
-#include "filestuff.h"
+#include "gdbsupport/filestuff.h"
 #endif
 
 #include "elf-bfd.h"
@@ -230,6 +231,13 @@ fbsd_fetch_cmdline (pid_t pid)
   gdb::unique_xmalloc_ptr<char> cmdline ((char *) xmalloc (len));
   if (sysctl (mib, 4, cmdline.get (), &len, NULL, 0) == -1)
     return nullptr;
+
+  /* Join the arguments with spaces to form a single string.  */
+  char *cp = cmdline.get ();
+  for (size_t i = 0; i < len - 1; i++)
+    if (cp[i] == '\0')
+      cp[i] = ' ';
+  cp[len - 1] = '\0';
 
   return cmdline;
 }
@@ -890,10 +898,9 @@ fbsd_nat_target::thread_alive (ptid_t ptid)
   return true;
 }
 
-/* Convert PTID to a string.  Returns the string in a static
-   buffer.  */
+/* Convert PTID to a string.  */
 
-const char *
+std::string
 fbsd_nat_target::pid_to_str (ptid_t ptid)
 {
   lwpid_t lwp;
@@ -901,11 +908,9 @@ fbsd_nat_target::pid_to_str (ptid_t ptid)
   lwp = ptid.lwp ();
   if (lwp != 0)
     {
-      static char buf[64];
       int pid = ptid.pid ();
 
-      xsnprintf (buf, sizeof buf, "LWP %d of process %d", lwp, pid);
-      return buf;
+      return string_printf ("LWP %d of process %d", lwp, pid);
     }
 
   return normal_pid_to_str (ptid);
@@ -1343,8 +1348,8 @@ fbsd_nat_target::wait (ptid_t ptid, struct target_waitstatus *ourstatus,
 					"FLWP: deleting thread for LWP %u\n",
 					pl.pl_lwpid);
 		  if (print_thread_events)
-		    printf_unfiltered (_("[%s exited]\n"), target_pid_to_str
-				       (wptid));
+		    printf_unfiltered (_("[%s exited]\n"),
+				       target_pid_to_str (wptid).c_str ());
 		  delete_thread (thr);
 		}
 	      if (ptrace (PT_CONTINUE, pid, (caddr_t) 1, 0) == -1)

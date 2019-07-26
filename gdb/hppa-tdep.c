@@ -84,7 +84,9 @@ struct hppa_objfile_private
    that separately and make this static. The solib data is probably hpux-
    specific, so we can create a separate extern objfile_data that is registered
    by hppa-hpux-tdep.c and shared with pa64solib.c and somsolib.c.  */
-static const struct objfile_data *hppa_objfile_priv_data = NULL;
+static const struct objfile_key<hppa_objfile_private,
+				gdb::noop_deleter<hppa_objfile_private>>
+  hppa_objfile_priv_data;
 
 /* Get at various relevent fields of an instruction word.  */
 #define MASK_5 0x1f
@@ -208,7 +210,7 @@ hppa_init_objfile_priv_data (struct objfile *objfile)
   hppa_objfile_private *priv
     = OBSTACK_ZALLOC (&objfile->objfile_obstack, hppa_objfile_private);
 
-  set_objfile_data (objfile, hppa_objfile_priv_data, priv);
+  hppa_objfile_priv_data.set (objfile, priv);
 
   return priv;
 }
@@ -466,8 +468,7 @@ read_unwind_info (struct objfile *objfile)
 	 compare_unwind_entries);
 
   /* Keep a pointer to the unwind information.  */
-  obj_private = (struct hppa_objfile_private *) 
-	        objfile_data (objfile, hppa_objfile_priv_data);
+  obj_private = hppa_objfile_priv_data.get (objfile);
   if (obj_private == NULL)
     obj_private = hppa_init_objfile_priv_data (objfile);
 
@@ -497,20 +498,18 @@ find_unwind_entry (CORE_ADDR pc)
       return NULL;
     }
 
-  for (objfile *objfile : all_objfiles (current_program_space))
+  for (objfile *objfile : current_program_space->objfiles ())
     {
       struct hppa_unwind_info *ui;
       ui = NULL;
-      priv = ((struct hppa_objfile_private *)
-	      objfile_data (objfile, hppa_objfile_priv_data));
+      priv = hppa_objfile_priv_data.get (objfile);
       if (priv)
 	ui = ((struct hppa_objfile_private *) priv)->unwind_info;
 
       if (!ui)
 	{
 	  read_unwind_info (objfile);
-	  priv = ((struct hppa_objfile_private *)
-		  objfile_data (objfile, hppa_objfile_priv_data));
+	  priv = hppa_objfile_priv_data.get (objfile);
 	  if (priv == NULL)
 	    error (_("Internal error reading unwind information."));
 	  ui = ((struct hppa_objfile_private *) priv)->unwind_info;
@@ -2505,14 +2504,6 @@ static const struct frame_unwind hppa_stub_frame_unwind = {
   hppa_stub_unwind_sniffer
 };
 
-static struct frame_id
-hppa_dummy_id (struct gdbarch *gdbarch, struct frame_info *this_frame)
-{
-  return frame_id_build (get_frame_register_unsigned (this_frame,
-                                                      HPPA_SP_REGNUM),
-			 get_frame_pc (this_frame));
-}
-
 CORE_ADDR
 hppa_unwind_pc (struct gdbarch *gdbarch, struct frame_info *next_frame)
 {
@@ -2542,9 +2533,9 @@ hppa_lookup_stub_minimal_symbol (const char *name,
 {
   struct bound_minimal_symbol result = { NULL, NULL };
 
-  for (objfile *objfile : all_objfiles (current_program_space))
+  for (objfile *objfile : current_program_space->objfiles ())
     {
-      for (minimal_symbol *msym : objfile_msymbols (objfile))
+      for (minimal_symbol *msym : objfile->msymbols ())
 	{
 	  if (strcmp (MSYMBOL_LINKAGE_NAME (msym), name) == 0)
 	    {
@@ -2588,10 +2579,8 @@ unwind_command (const char *exp, int from_tty)
   printf_unfiltered ("unwind_table_entry (%s):\n", host_address_to_string (u));
 
   printf_unfiltered ("\tregion_start = %s\n", hex_string (u->region_start));
-  gdb_flush (gdb_stdout);
 
   printf_unfiltered ("\tregion_end = %s\n", hex_string (u->region_end));
-  gdb_flush (gdb_stdout);
 
 #define pif(FLD) if (u->FLD) printf_unfiltered (" "#FLD);
 
@@ -3156,7 +3145,6 @@ hppa_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   set_gdbarch_pseudo_register_read (gdbarch, hppa_pseudo_register_read);
 
   /* Frame unwind methods.  */
-  set_gdbarch_dummy_id (gdbarch, hppa_dummy_id);
   set_gdbarch_unwind_pc (gdbarch, hppa_unwind_pc);
 
   /* Hook in ABI-specific overrides, if they have been registered.  */
@@ -3184,8 +3172,6 @@ void
 _initialize_hppa_tdep (void)
 {
   gdbarch_register (bfd_arch_hppa, hppa_gdbarch_init, hppa_dump_tdep);
-
-  hppa_objfile_priv_data = register_objfile_data ();
 
   add_cmd ("unwind", class_maintenance, unwind_command,
 	   _("Print unwind table entry at given address."),

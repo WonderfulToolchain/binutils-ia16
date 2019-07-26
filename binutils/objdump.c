@@ -56,6 +56,7 @@
 #include "bucomm.h"
 #include "elfcomm.h"
 #include "dwarf.h"
+#include "ctf-api.h"
 #include "getopt.h"
 #include "safe-ctype.h"
 #include "dis-asm.h"
@@ -98,6 +99,9 @@ static bfd_boolean with_source_code;	/* -S */
 static int show_raw_insn;		/* --show-raw-insn */
 static int dump_dwarf_section_info;	/* --dwarf */
 static int dump_stab_section_info;	/* --stabs */
+static int dump_ctf_section_info;       /* --ctf */
+static char *dump_ctf_section_name;
+static char *dump_ctf_parent_name;	/* --ctf-parent */
 static int do_demangle;			/* -C, --demangle */
 static bfd_boolean disassemble;		/* -d */
 static bfd_boolean disassemble_all;	/* -D */
@@ -188,8 +192,6 @@ static bfd_size_type stab_size;
 static bfd_byte *strtab;
 static bfd_size_type stabstr_size;
 
-static bfd_boolean is_relocatable = FALSE;
-
 /* Handlers for -P/--private.  */
 static const struct objdump_private_desc * const objdump_private_vectors[] =
   {
@@ -225,6 +227,7 @@ usage (FILE *stream, int status)
           =gdb_index,=trace_info,=trace_abbrev,=trace_aranges,\n\
           =addr,=cu_index,=links,=follow-links]\n\
                            Display DWARF info in the file\n\
+  --ctf=SECTION            Display CTF info from SECTION\n\
   -t, --syms               Display the contents of the symbol table(s)\n\
   -T, --dynamic-syms       Display the contents of the dynamic symbol table\n\
   -r, --reloc              Display the relocation entries in the file\n\
@@ -273,7 +276,8 @@ usage (FILE *stream, int status)
       --dwarf-start=N        Display DIEs starting with N, at the same depth\n\
                              or deeper\n\
       --dwarf-check          Make additional dwarf internal consistency checks.\
-      \n\n"));
+      \n\
+      --ctf-parent=SECTION     Use SECTION as the CTF parent\n\n"));
       list_supported_targets (program_name, stream);
       list_supported_architectures (program_name, stream);
 
@@ -308,7 +312,9 @@ enum option_values
     OPTION_DWARF_START,
     OPTION_RECURSE_LIMIT,
     OPTION_NO_RECURSE_LIMIT,
-    OPTION_INLINES
+    OPTION_INLINES,
+    OPTION_CTF,
+    OPTION_CTF_PARENT
   };
 
 static struct option long_options[]=
@@ -351,6 +357,8 @@ static struct option long_options[]=
   {"special-syms", no_argument, &dump_special_syms, 1},
   {"include", required_argument, NULL, 'I'},
   {"dwarf", optional_argument, NULL, OPTION_DWARF},
+  {"ctf", required_argument, NULL, OPTION_CTF},
+  {"ctf-parent", required_argument, NULL, OPTION_CTF_PARENT},
   {"stabs", no_argument, NULL, 'G'},
   {"start-address", required_argument, NULL, OPTION_START_ADDRESS},
   {"stop-address", required_argument, NULL, OPTION_STOP_ADDRESS},
@@ -382,10 +390,10 @@ nonfatal (const char *msg)
 static const char *
 sanitize_string (const char * in)
 {
-  static char *        buffer = NULL;
-  static unsigned int  buffer_len = 0;
-  const char *         original = in;
-  char *               out;
+  static char *  buffer = NULL;
+  static size_t  buffer_len = 0;
+  const char *   original = in;
+  char *         out;
 
   /* Paranoia.  */
   if (in == NULL)
@@ -694,7 +702,26 @@ slurp_symtab (bfd *abfd)
       bfd_fatal (_("error message was"));
     }
   if (storage)
-    sy = (asymbol **) xmalloc (storage);
+    {
+      off_t filesize = bfd_get_file_size (abfd);
+
+      /* qv PR 24707.  */
+      if (filesize > 0
+	  && filesize < storage
+	  /* The MMO file format supports its own special compression
+	     technique, so its sections can be larger than the file size.  */
+	  && bfd_get_flavour (abfd) != bfd_target_mmo_flavour)	  
+	{
+	  bfd_nonfatal_message (bfd_get_filename (abfd), abfd, NULL,
+				_("error: symbol table size (%#lx) is larger than filesize (%#lx)"),
+			storage, (long) filesize);
+	  exit_status = 1;
+	  symcount = 0;
+	  return NULL;
+	}
+
+      sy = (asymbol **) xmalloc (storage);
+    }
 
   symcount = bfd_canonicalize_symtab (abfd, sy);
   if (symcount < 0)
@@ -987,6 +1014,30 @@ objdump_print_symname (bfd *abfd, struct disassemble_info *inf,
     free (alloc);
 }
 
+static inline bfd_boolean
+sym_ok (bfd_boolean               want_section,
+	bfd *                     abfd ATTRIBUTE_UNUSED,
+	long                      place,
+	asection *                sec,
+	struct disassemble_info * inf)
+{
+  if (want_section)
+    {
+      /* Note - we cannot just compare section pointers because they could
+	 be different, but the same...  Ie the symbol that we are trying to
+	 find could have come from a separate debug info file.  Under such
+	 circumstances the symbol will be associated with a section in the
+	 debug info file, whilst the section we want is in a normal file.
+	 So the section pointers will be different, but the section names
+	 will be the same.  */
+      if (strcmp (bfd_section_name (abfd, sorted_syms[place]->section),
+		  bfd_section_name (abfd, sec)) != 0)
+	return FALSE;
+    }
+
+  return inf->symbol_is_valid (sorted_syms[place], inf);
+}
+
 /* Locate a symbol given a bfd and a section (from INFO->application_data),
    and a VMA.  If INFO->application_data->require_sec is TRUE, then always
    require the symbol to be in the section.  Returns NULL if there is no
@@ -1062,8 +1113,7 @@ find_symbol_for_address (bfd_vma vma,
 	 && (bfd_asymbol_value (sorted_syms[min])
 	     == bfd_asymbol_value (sorted_syms[thisplace])))
     {
-      if (sorted_syms[min]->section == sec
-	  && inf->symbol_is_valid (sorted_syms[min], inf))
+      if (sym_ok (TRUE, abfd, min, sec, inf))
 	{
 	  thisplace = min;
 
@@ -1090,16 +1140,15 @@ find_symbol_for_address (bfd_vma vma,
 		      && vma >= bfd_get_section_vma (abfd, sec)
 		      && vma < (bfd_get_section_vma (abfd, sec)
 				+ bfd_section_size (abfd, sec) / opb)));
-  if ((sorted_syms[thisplace]->section != sec && want_section)
-      || ! inf->symbol_is_valid (sorted_syms[thisplace], inf))
+  
+  if (! sym_ok (want_section, abfd, thisplace, sec, inf))
     {
       long i;
       long newplace = sorted_symcount;
 
       for (i = min - 1; i >= 0; i--)
 	{
-	  if ((sorted_syms[i]->section == sec || !want_section)
-	      && inf->symbol_is_valid (sorted_syms[i], inf))
+	  if (sym_ok (want_section, abfd, i, sec, inf))
 	    {
 	      if (newplace == sorted_symcount)
 		newplace = i;
@@ -1122,8 +1171,7 @@ find_symbol_for_address (bfd_vma vma,
 	     Look for one with a larger value.  */
 	  for (i = thisplace + 1; i < sorted_symcount; i++)
 	    {
-	      if ((sorted_syms[i]->section == sec || !want_section)
-		  && inf->symbol_is_valid (sorted_syms[i], inf))
+	      if (sym_ok (want_section, abfd, i, sec, inf))
 		{
 		  thisplace = i;
 		  break;
@@ -1131,8 +1179,7 @@ find_symbol_for_address (bfd_vma vma,
 	    }
 	}
 
-      if ((sorted_syms[thisplace]->section != sec && want_section)
-	  || ! inf->symbol_is_valid (sorted_syms[thisplace], inf))
+      if (! sym_ok (want_section, abfd, thisplace, sec, inf))
 	/* There is no suitable symbol.  */
 	return NULL;
     }
@@ -1926,7 +1973,8 @@ disassemble_bytes (struct disassemble_info * inf,
 	      inf->stream = &sfile;
 	      inf->bytes_per_line = 0;
 	      inf->bytes_per_chunk = 0;
-	      inf->flags = disassemble_all ? DISASSEMBLE_DATA : 0;
+	      inf->flags = ((disassemble_all ? DISASSEMBLE_DATA : 0)
+			    | (wide_output ? WIDE_OUTPUT : 0));
 	      if (machine)
 		inf->flags |= USER_SPECIFIED_MACHINE_TYPE;
 
@@ -1971,6 +2019,7 @@ disassemble_bytes (struct disassemble_info * inf,
 		   disassembling code of course, and when -D is in effect.  */
 		inf->stop_vma = section->vma + stop_offset;
 
+	      inf->stop_offset = stop_offset;
 	      octets = (*disassemble_fn) (section->vma + addr_offset, inf);
 
 	      inf->stop_vma = 0;
@@ -2211,6 +2260,13 @@ disassemble_section (bfd *abfd, asection *section, void *inf)
   long                         rel_count;
   bfd_vma                      rel_offset;
   unsigned long                addr_offset;
+  bfd_boolean                  do_print;
+  enum loop_control
+  {
+   stop_offset_reached,
+   function_sym,
+   next_sym
+  } loop_until;
 
   /* Sections that do not contain machine
      code are not normally disassembled.  */
@@ -2328,13 +2384,15 @@ disassemble_section (bfd *abfd, asection *section, void *inf)
      the symbol we have just found.  Then print the symbol and find the
      next symbol on.  Repeat until we have disassembled the entire section
      or we have reached the end of the address range we are interested in.  */
+  do_print = paux->symbol == NULL;
+  loop_until = stop_offset_reached;
+
   while (addr_offset < stop_offset)
     {
       bfd_vma addr;
       asymbol *nextsym;
       bfd_vma nextstop_offset;
       bfd_boolean insns;
-      bfd_boolean do_print = TRUE;
 
       addr = section->vma + addr_offset;
       addr = ((addr & ((sign_adjust << 1) - 1)) ^ sign_adjust) - sign_adjust;
@@ -2360,20 +2418,80 @@ disassemble_section (bfd *abfd, asection *section, void *inf)
 	  pinfo->symtab_pos = -1;
 	}
 
+      /* If we are only disassembling from a specific symbol,
+	 check to see if we should start or stop displaying.  */
       if (sym && paux->symbol)
 	{
-	  const char *name = bfd_asymbol_name (sym);
-	  char *alloc = NULL;
-
-	  if (do_demangle && name[0] != '\0')
+	  if (do_print)
 	    {
-	      /* Demangle the name.  */
-	      alloc = bfd_demangle (abfd, name, demangle_flags);
-	      if (alloc != NULL)
-		name = alloc;
+	      /* See if we should stop printing.  */
+	      switch (loop_until)
+		{
+		case function_sym:
+		  if (sym->flags & BSF_FUNCTION)
+		    do_print = FALSE;
+		  break;
+
+		case stop_offset_reached:
+		  /* Handled by the while loop.  */
+		  break;
+
+		case next_sym:
+		  /* FIXME: There is an implicit assumption here
+		     that the name of sym is different from
+		     paux->symbol.  */
+		  if (! bfd_is_local_label (abfd, sym))
+		    do_print = FALSE;
+		  break;
+		}
 	    }
-	  do_print = streq (name, paux->symbol);
-	  free (alloc);
+	  else
+	    {
+	      const char * name = bfd_asymbol_name (sym);
+	      char * alloc = NULL;
+
+	      if (do_demangle && name[0] != '\0')
+		{
+		  /* Demangle the name.  */
+		  alloc = bfd_demangle (abfd, name, demangle_flags);
+		  if (alloc != NULL)
+		    name = alloc;
+		}
+
+	      /* We are not currently printing.  Check to see
+		 if the current symbol matches the requested symbol.  */
+	      if (streq (name, paux->symbol))
+		{
+		  do_print = TRUE;
+
+		  if (sym->flags & BSF_FUNCTION)
+		    {
+		      if (bfd_get_flavour (abfd) == bfd_target_elf_flavour
+			  && ((elf_symbol_type *) sym)->internal_elf_sym.st_size > 0)
+			{
+			  /* Sym is a function symbol with a size associated
+			     with it.  Turn on automatic disassembly for the
+			     next VALUE bytes.  */
+			  stop_offset = addr_offset
+			    + ((elf_symbol_type *) sym)->internal_elf_sym.st_size;
+			  loop_until = stop_offset_reached;
+			}
+		      else
+			{
+			  /* Otherwise we need to tell the loop heuristic to
+			     loop until the next function symbol is encountered.  */
+			  loop_until = function_sym;
+			}
+		    }
+		  else
+		    {
+		      /* Otherwise loop until the next symbol is encountered.  */
+		      loop_until = next_sym;
+		    }
+		}
+
+	      free (alloc);
+	    }
 	}
 
       if (! prefix_addresses && do_print)
@@ -2391,7 +2509,7 @@ disassemble_section (bfd *abfd, asection *section, void *inf)
       else
 	{
 #define is_valid_next_sym(SYM) \
-  ((SYM)->section == section \
+  (strcmp (bfd_section_name (abfd, (SYM)->section), bfd_section_name (abfd, section)) == 0 \
    && (bfd_asymbol_value (SYM) > bfd_asymbol_value (sym)) \
    && pinfo->symbol_is_valid (SYM, pinfo))
 
@@ -2438,13 +2556,9 @@ disassemble_section (bfd *abfd, asection *section, void *inf)
 	insns = FALSE;
 
       if (do_print)
-	{
-	  disassemble_bytes (pinfo, paux->disassemble_fn, insns, data,
-			     addr_offset, nextstop_offset,
-			     rel_offset, &rel_pp, rel_ppend);
-	  if (paux->symbol)
-	    break;
-	}
+	disassemble_bytes (pinfo, paux->disassemble_fn, insns, data,
+			   addr_offset, nextstop_offset,
+			   rel_offset, &rel_pp, rel_ppend);
 
       addr_offset = nextstop_offset;
       sym = nextsym;
@@ -2594,6 +2708,7 @@ load_specific_debug_section (enum dwarf_section_display_enum debug,
   bfd *abfd = (bfd *) file;
   bfd_byte *contents;
   bfd_size_type amt;
+  size_t alloced;
 
   if (section->start != NULL)
     {
@@ -2609,8 +2724,9 @@ load_specific_debug_section (enum dwarf_section_display_enum debug,
   section->address = bfd_get_section_vma (abfd, sec);
   section->user_data = sec;
   section->size = bfd_get_section_size (sec);
-  amt = section->size + 1;
-  if (amt == 0 || amt > bfd_get_file_size (abfd))
+  /* PR 24360: On 32-bit hosts sizeof (size_t) < sizeof (bfd_size_type). */
+  alloced = amt = section->size + 1;
+  if (alloced != amt || alloced == 0)
     {
       section->start = NULL;
       free_debug_section (debug);
@@ -2619,7 +2735,7 @@ load_specific_debug_section (enum dwarf_section_display_enum debug,
 	      (unsigned long long) section->size);
       return FALSE;
     }
-  section->start = contents = malloc (amt);
+  section->start = contents = malloc (alloced);
   if (section->start == NULL
       || !bfd_get_full_section_contents (abfd, sec, &contents))
     {
@@ -2631,7 +2747,8 @@ load_specific_debug_section (enum dwarf_section_display_enum debug,
   /* Ensure any string section has a terminating NUL.  */
   section->start[section->size] = 0;
 
-  if (is_relocatable && debug_displays [debug].relocate)
+  if ((abfd->flags & (EXEC_P | DYNAMIC)) == 0
+      && debug_displays [debug].relocate)
     {
       long         reloc_size;
       bfd_boolean  ret;
@@ -2817,23 +2934,15 @@ dump_dwarf_section (bfd *abfd, asection *section,
 static void
 dump_dwarf (bfd *abfd)
 {
-  bfd * separates;
-
-  is_relocatable = (abfd->flags & (EXEC_P | DYNAMIC)) == 0;
-
-  eh_addr_size = bfd_arch_bits_per_address (abfd) / 8;
-
-  if (bfd_big_endian (abfd))
-    byte_get = byte_get_big_endian;
-  else if (bfd_little_endian (abfd))
-    byte_get = byte_get_little_endian;
-  else
-    /* PR 17512: file: objdump-s-endless-loop.tekhex.  */
+  /* The byte_get pointer should have been set at the start of dump_bfd().  */
+  if (byte_get == NULL)
     {
       warn (_("File %s does not contain any dwarf debug information\n"),
 	    bfd_get_filename (abfd));
       return;
     }
+
+  eh_addr_size = bfd_arch_bits_per_address (abfd) / 8;
 
   switch (bfd_get_arch (abfd))
     {
@@ -2881,21 +2990,15 @@ dump_dwarf (bfd *abfd)
       break;
     }
 
-  separates = load_separate_debug_file (abfd, bfd_get_filename (abfd));
-
   bfd_map_over_sections (abfd, dump_dwarf_section, NULL);
-
-  if (separates)
-    bfd_map_over_sections (separates, dump_dwarf_section, NULL);
-
-  free_debug_memory ();
 }
 
 /* Read ABFD's stabs section STABSECT_NAME, and return a pointer to
    it.  Return NULL on failure.   */
 
 static bfd_byte *
-read_section_stabs (bfd *abfd, const char *sect_name, bfd_size_type *size_ptr)
+read_section_stabs (bfd *abfd, const char *sect_name, bfd_size_type *size_ptr,
+		    bfd_size_type *entsize_ptr)
 {
   asection *stabsect;
   bfd_byte *contents;
@@ -2919,6 +3022,8 @@ read_section_stabs (bfd *abfd, const char *sect_name, bfd_size_type *size_ptr)
     }
 
   *size_ptr = bfd_section_size (abfd, stabsect);
+  if (entsize_ptr)
+    *entsize_ptr = stabsect->entsize;
 
   return contents;
 }
@@ -3042,11 +3147,11 @@ find_stabs_section (bfd *abfd, asection *section, void *names)
     {
       if (strtab == NULL)
 	strtab = read_section_stabs (abfd, sought->string_section_name,
-				     &stabstr_size);
+				     &stabstr_size, NULL);
 
       if (strtab)
 	{
-	  stabs = read_section_stabs (abfd, section->name, &stab_size);
+	  stabs = read_section_stabs (abfd, section->name, &stab_size, NULL);
 	  if (stabs)
 	    print_section_stabs (abfd, section->name, &sought->string_offset);
 	}
@@ -3108,12 +3213,145 @@ dump_bfd_header (bfd *abfd)
   bfd_printf_vma (abfd, abfd->start_address);
   printf ("\n");
 }
+
+
+/* Formatting callback function passed to ctf_dump.  Returns either the pointer
+   it is passed, or a pointer to newly-allocated storage, in which case
+   dump_ctf() will free it when it no longer needs it.  */
+
+static char *
+dump_ctf_indent_lines (ctf_sect_names_t sect ATTRIBUTE_UNUSED,
+		       char *s, void *arg)
+{
+  const char *blanks = arg;
+  char *new_s;
+
+  if (asprintf (&new_s, "%s%s", blanks, s) < 0)
+    return s;
+  return new_s;
+}
+
+/* Make a ctfsect suitable for ctf_bfdopen_ctfsect().  */
+static ctf_sect_t
+make_ctfsect (const char *name, bfd_byte *data,
+	      bfd_size_type size)
+{
+  ctf_sect_t ctfsect;
+
+  ctfsect.cts_name = name;
+  ctfsect.cts_entsize = 1;
+  ctfsect.cts_size = size;
+  ctfsect.cts_data = data;
+
+  return ctfsect;
+}
+
+/* Dump one CTF archive member.  */
+
+static int
+dump_ctf_archive_member (ctf_file_t *ctf, const char *name, void *arg)
+{
+  ctf_file_t *parent = (ctf_file_t *) arg;
+  const char *things[] = {"Labels", "Data objects", "Function objects",
+			  "Variables", "Types", "Strings", ""};
+  const char **thing;
+  size_t i;
+
+  /* Only print out the name of non-default-named archive members.
+     The name .ctf appears everywhere, even for things that aren't
+     really archives, so printing it out is liable to be confusing.  */
+  if (strcmp (name, ".ctf") != 0)
+    printf (_("\nCTF archive member: %s:\n"), sanitize_string (name));
+
+  ctf_import (ctf, parent);
+  for (i = 1, thing = things; *thing[0]; thing++, i++)
+    {
+      ctf_dump_state_t *s = NULL;
+      char *item;
+
+      printf ("\n  %s:\n", *thing);
+      while ((item = ctf_dump (ctf, &s, i, dump_ctf_indent_lines,
+			       (void *) "    ")) != NULL)
+	{
+	  printf ("%s\n", item);
+	  free (item);
+	}
+
+      if (ctf_errno (ctf))
+	{
+	  non_fatal (_("Iteration failed: %s, %s\n"), *thing,
+		   ctf_errmsg (ctf_errno (ctf)));
+	  break;
+	}
+    }
+  return 0;
+}
+
+/* Dump the CTF debugging information.  */
+
+static void
+dump_ctf (bfd *abfd, const char *sect_name, const char *parent_name)
+{
+  ctf_archive_t *ctfa, *parenta = NULL;
+  bfd_byte *ctfdata, *parentdata = NULL;
+  bfd_size_type ctfsize, parentsize;
+  ctf_sect_t ctfsect;
+  ctf_file_t *parent = NULL;
+  int err;
+
+  if ((ctfdata = read_section_stabs (abfd, sect_name, &ctfsize, NULL)) == NULL)
+      bfd_fatal (bfd_get_filename (abfd));
+
+  if (parent_name
+      && (parentdata = read_section_stabs (abfd, parent_name, &parentsize,
+					   NULL)) == NULL)
+      bfd_fatal (bfd_get_filename (abfd));
+
+  /* Load the CTF file and dump it.  */
+
+  ctfsect = make_ctfsect (sect_name, ctfdata, ctfsize);
+  if ((ctfa = ctf_bfdopen_ctfsect (abfd, &ctfsect, &err)) == NULL)
+    {
+      non_fatal (_("CTF open failure: %s\n"), ctf_errmsg (err));
+      bfd_fatal (bfd_get_filename (abfd));
+    }
+
+  if (parentdata)
+    {
+      ctfsect = make_ctfsect (parent_name, parentdata, parentsize);
+      if ((parenta = ctf_bfdopen_ctfsect (abfd, &ctfsect, &err)) == NULL)
+	{
+	  non_fatal (_("CTF open failure: %s\n"), ctf_errmsg (err));
+	  bfd_fatal (bfd_get_filename (abfd));
+	}
+
+      /* Assume that the applicable parent archive member is the default one.
+	 (This is what all known implementations are expected to do, if they
+	 put CTFs and their parents in archives together.)  */
+      if ((parent = ctf_arc_open_by_name (parenta, NULL, &err)) == NULL)
+	{
+	  non_fatal (_("CTF open failure: %s\n"), ctf_errmsg (err));
+	  bfd_fatal (bfd_get_filename (abfd));
+	}
+    }
+
+  printf (_("Contents of CTF section %s:\n"), sanitize_string (sect_name));
+
+  ctf_archive_iter (ctfa, dump_ctf_archive_member, parent);
+  ctf_file_close (parent);
+  ctf_close (ctfa);
+  ctf_close (parenta);
+  free (parentdata);
+  free (ctfdata);
+}
 
 
 static void
 dump_bfd_private_header (bfd *abfd)
 {
-  bfd_print_private_bfd_data (abfd, stdout);
+  if (!bfd_print_private_bfd_data (abfd, stdout))
+    non_fatal (_("warning: private headers incomplete: %s"),
+	       bfd_errmsg (bfd_get_error ()));
 }
 
 static void
@@ -3555,7 +3793,7 @@ dump_relocs_in_section (bfd *abfd,
 			asection *section,
 			void *dummy ATTRIBUTE_UNUSED)
 {
-  arelent **relpp;
+  arelent **relpp = NULL;
   long relcount;
   long relsize;
 
@@ -3566,47 +3804,28 @@ dump_relocs_in_section (bfd *abfd,
       || ((section->flags & SEC_RELOC) == 0))
     return;
 
-  relsize = bfd_get_reloc_upper_bound (abfd, section);
-  if (relsize < 0)
-    bfd_fatal (bfd_get_filename (abfd));
-
   printf ("RELOCATION RECORDS FOR [%s]:", sanitize_string (section->name));
 
+  relsize = bfd_get_reloc_upper_bound (abfd, section);
   if (relsize == 0)
     {
       printf (" (none)\n\n");
       return;
     }
 
-  if ((bfd_get_file_flags (abfd) & (BFD_IN_MEMORY | BFD_LINKER_CREATED)) == 0
-      && (/* Check that the size of the relocs is reasonable.  Note that some
-	     file formats, eg aout, can have relocs whose internal size is
-	     larger than their external size, thus we check the size divided
-	     by four against the file size.  See PR 23931 for an example of
-	     this.  */
-	  ((ufile_ptr) (relsize / 4) > bfd_get_file_size (abfd))
-	  /* Also check the section's reloc count since if this is negative
-	     (or very large) the computation in bfd_get_reloc_upper_bound
-	     may have resulted in returning a small, positive integer.
-	     See PR 22508 for a reproducer.
-
-	     Note - we check against file size rather than section size as
-	     it is possible for there to be more relocs that apply to a
-	     section than there are bytes in that section.  */
-	  || (section->reloc_count > bfd_get_file_size (abfd))))
+  if (relsize < 0)
+    relcount = relsize;
+  else
     {
-      printf (" (too many: %#x relocs)\n", section->reloc_count);
-      bfd_set_error (bfd_error_file_truncated);
-      bfd_fatal (bfd_get_filename (abfd));
+      relpp = (arelent **) xmalloc (relsize);
+      relcount = bfd_canonicalize_reloc (abfd, section, relpp, syms);
     }
-
-  relpp = (arelent **) xmalloc (relsize);
-  relcount = bfd_canonicalize_reloc (abfd, section, relpp, syms);
 
   if (relcount < 0)
     {
       printf ("\n");
-      non_fatal (_("failed to read relocs in: %s"), sanitize_string (bfd_get_filename (abfd)));
+      non_fatal (_("failed to read relocs in: %s"),
+		 sanitize_string (bfd_get_filename (abfd)));
       bfd_fatal (_("error message was"));
     }
   else if (relcount == 0)
@@ -3691,11 +3910,67 @@ adjust_addresses (bfd *abfd ATTRIBUTE_UNUSED,
     }
 }
 
+/* Return the sign-extended form of an ARCH_SIZE sized VMA.  */
+
+static bfd_vma
+sign_extend_address (bfd *abfd ATTRIBUTE_UNUSED,
+		     bfd_vma vma,
+		     unsigned arch_size)
+{
+  bfd_vma mask;
+  mask = (bfd_vma) 1 << (arch_size - 1);
+  return (((vma & ((mask << 1) - 1)) ^ mask) - mask);
+}
+
 /* Dump selected contents of ABFD.  */
 
 static void
-dump_bfd (bfd *abfd)
+dump_bfd (bfd *abfd, bfd_boolean is_mainfile)
 {
+  const struct elf_backend_data * bed;
+
+  if (bfd_big_endian (abfd))
+    byte_get = byte_get_big_endian;
+  else if (bfd_little_endian (abfd))
+    byte_get = byte_get_little_endian;
+  else
+    byte_get = NULL;
+
+  /* Load any separate debug information files.
+     We do this now and without checking do_follow_links because separate
+     debug info files may contain symbol tables that we will need when
+     displaying information about the main file.  Any memory allocated by
+     load_separate_debug_files will be released when we call
+     free_debug_memory below.
+     
+     The test on is_mainfile is there because the chain of separate debug
+     info files is a global variable shared by all invocations of dump_bfd.  */
+  if (is_mainfile)
+    {
+      load_separate_debug_files (abfd, bfd_get_filename (abfd));
+
+      /* If asked to do so, recursively dump the separate files.  */
+      if (do_follow_links)
+	{
+	  separate_info * i;
+
+	  for (i = first_separate_info; i != NULL; i = i->next)
+	    dump_bfd (i->handle, FALSE);
+	}
+    }
+
+  /* Adjust user-specified start and stop limits for targets that use
+     signed addresses.  */
+  if (bfd_get_flavour (abfd) == bfd_target_elf_flavour
+      && (bed = get_elf_backend_data (abfd)) != NULL
+      && bed->sign_extend_vma)
+    {
+      start_address = sign_extend_address (abfd, start_address,
+					   bed->s->arch_size);
+      stop_address = sign_extend_address (abfd, stop_address,
+					  bed->s->arch_size);
+    }
+
   /* If we are adjusting section VMA's, change them all now.  Changing
      the BFD information is a hack.  However, we must do it, or
      bfd_find_nearest_line will not do the right thing.  */
@@ -3725,7 +4000,40 @@ dump_bfd (bfd *abfd)
       || disassemble
       || dump_debugging
       || dump_dwarf_section_info)
-    syms = slurp_symtab (abfd);
+    {
+      syms = slurp_symtab (abfd);
+
+      /* If following links, load any symbol tables from the linked files as well.  */
+      if (do_follow_links && is_mainfile)
+	{
+	  separate_info * i;
+
+	  for (i = first_separate_info; i != NULL; i = i->next)
+	    {
+	      asymbol **  extra_syms;
+	      long        old_symcount = symcount;
+	      
+	      extra_syms = slurp_symtab (i->handle);
+
+	      if (extra_syms)
+		{
+		  if (old_symcount == 0)
+		    {
+		      syms = extra_syms;
+		    }
+		  else
+		    {
+		      syms = xrealloc (syms, (symcount + old_symcount) * sizeof (asymbol *));
+		      memcpy (syms + old_symcount,
+			      extra_syms,
+			      symcount * sizeof (asymbol *));
+		    }
+		}
+
+	      symcount += old_symcount;
+	    }
+	}
+    }
 
   if (dump_section_headers)
     dump_headers (abfd);
@@ -3733,6 +4041,7 @@ dump_bfd (bfd *abfd)
   if (dump_dynamic_symtab || dump_dynamic_reloc_info
       || (disassemble && bfd_get_dynamic_symtab_upper_bound (abfd) > 0))
     dynsyms = slurp_dynamic_symtab (abfd);
+
   if (disassemble)
     {
       synthcount = bfd_get_synthetic_symtab (abfd, symcount, syms,
@@ -3747,6 +4056,8 @@ dump_bfd (bfd *abfd)
     dump_symbols (abfd, TRUE);
   if (dump_dwarf_section_info)
     dump_dwarf (abfd);
+  if (dump_ctf_section_info)
+    dump_ctf (abfd, dump_ctf_section_name, dump_ctf_parent_name);
   if (dump_stab_section_info)
     dump_stabs (abfd);
   if (dump_reloc_info && ! disassemble)
@@ -3806,6 +4117,9 @@ dump_bfd (bfd *abfd)
   symcount = 0;
   dynsymcount = 0;
   synthcount = 0;
+
+  if (is_mainfile)
+    free_debug_memory ();
 }
 
 static void
@@ -3815,7 +4129,7 @@ display_object_bfd (bfd *abfd)
 
   if (bfd_check_format_matches (abfd, bfd_object, &matching))
     {
-      dump_bfd (abfd);
+      dump_bfd (abfd, TRUE);
       return;
     }
 
@@ -3835,7 +4149,7 @@ display_object_bfd (bfd *abfd)
 
   if (bfd_check_format_matches (abfd, bfd_core, &matching))
     {
-      dump_bfd (abfd);
+      dump_bfd (abfd, TRUE);
       return;
     }
 
@@ -4183,6 +4497,14 @@ main (int argc, char **argv)
 	case OPTION_DWARF_CHECK:
 	  dwarf_check = TRUE;
 	  break;
+        case OPTION_CTF:
+          dump_ctf_section_info = TRUE;
+          dump_ctf_section_name = xstrdup (optarg);
+          seenflag = TRUE;
+          break;
+	case OPTION_CTF_PARENT:
+	  dump_ctf_parent_name = xstrdup (optarg);
+	  break;
 	case 'G':
 	  dump_stab_section_info = TRUE;
 	  seenflag = TRUE;
@@ -4242,6 +4564,8 @@ main (int argc, char **argv)
     }
 
   free_only_list ();
+  free (dump_ctf_section_name);
+  free (dump_ctf_parent_name);
 
   END_PROGRESS (program_name);
 

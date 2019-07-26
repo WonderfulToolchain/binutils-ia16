@@ -3485,9 +3485,7 @@ cris_elf_check_relocs (bfd *abfd,
 	/* This relocation describes which C++ vtable entries are actually
 	   used.  Record for later use during GC.  */
 	case R_CRIS_GNU_VTENTRY:
-	  BFD_ASSERT (h != NULL);
-	  if (h != NULL
-	      && !bfd_elf_gc_record_vtentry (abfd, sec, h, rel->r_addend))
+	  if (!bfd_elf_gc_record_vtentry (abfd, sec, h, rel->r_addend))
 	    return FALSE;
 	  break;
 
@@ -3831,9 +3829,8 @@ cris_elf_object_p (bfd *abfd)
 /* Mark presence or absence of leading underscore.  Set machine type
    flags from mach type.  */
 
-static void
-cris_elf_final_write_processing (bfd *abfd,
-				 bfd_boolean linker ATTRIBUTE_UNUSED)
+static bfd_boolean
+cris_elf_final_write_processing (bfd *abfd)
 {
   unsigned long e_flags = elf_elfheader (abfd)->e_flags;
 
@@ -3861,6 +3858,7 @@ cris_elf_final_write_processing (bfd *abfd,
     }
 
   elf_elfheader (abfd)->e_flags = e_flags;
+  return _bfd_elf_final_write_processing (abfd);
 }
 
 /* Set the mach type from e_flags value.  */

@@ -17,10 +17,11 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#ifndef CLI_STYLE_H
-#define CLI_STYLE_H
+#ifndef CLI_CLI_STYLE_H
+#define CLI_CLI_STYLE_H
 
 #include "ui-file.h"
+#include "command.h"
 
 /* A single CLI style option.  */
 class cli_style_option
@@ -28,21 +29,37 @@ class cli_style_option
 public:
 
   /* Construct a CLI style option with a foreground color.  */
-  cli_style_option (ui_file_style::basic_color fg);
+  cli_style_option (const char *name, ui_file_style::basic_color fg);
+
+  /* Construct a CLI style option with an intensity.  */
+  cli_style_option (const char *name, ui_file_style::intensity i);
 
   /* Return a ui_file_style corresponding to the settings in this CLI
      style.  */
   ui_file_style style () const;
 
+  /* Return the style name.  */
+  const char *name () { return m_name; };
+
   /* Call once to register this CLI style with the CLI engine.  */
-  void add_setshow_commands (const char *name,
-			     enum command_class theclass,
+  void add_setshow_commands (enum command_class theclass,
 			     const char *prefix_doc,
-			     const char *prefixname,
 			     struct cmd_list_element **set_list,
-			     struct cmd_list_element **show_list);
+			     void (*do_set) (const char *args, int from_tty),
+			     struct cmd_list_element **show_list,
+			     void (*do_show) (const char *args, int from_tty));
+
+  /* Return the 'set style NAME' command list, that can be used
+     to build a lambda DO_SET to call add_setshow_commands.  */
+  struct cmd_list_element *set_list () { return m_set_list; };
+
+  /* Same as SET_LIST but for the show command list.  */
+  struct cmd_list_element *show_list () { return m_show_list; };
 
 private:
+
+  /* The style name.  */
+  const char *m_name;
 
   /* The foreground.  */
   const char *m_foreground;
@@ -59,10 +76,6 @@ private:
   struct cmd_list_element *m_set_list = nullptr;
   struct cmd_list_element *m_show_list = nullptr;
 
-  /* Callback to set a value.  */
-  static void do_set (const char *args, int from_tty);
-  /* Callback to show a value.  */
-  static void do_show (const char *args, int from_tty);
   /* Callback to show the foreground.  */
   static void do_show_foreground (struct ui_file *file, int from_tty,
 				  struct cmd_list_element *cmd,
@@ -89,7 +102,17 @@ extern cli_style_option variable_name_style;
 /* The address style.  */
 extern cli_style_option address_style;
 
+/* The highlight style.  */
+extern cli_style_option highlight_style;
+
+/* The title style.  */
+extern cli_style_option title_style;
+
+
+/* True if source styling is enabled.  */
+extern int source_styling;
+
 /* True if styling is enabled.  */
 extern int cli_styling;
 
-#endif /* CLI_STYLE_H */
+#endif /* CLI_CLI_STYLE_H */

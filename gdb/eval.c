@@ -123,7 +123,7 @@ parse_and_eval (const char *exp)
 struct value *
 parse_to_comma_and_eval (const char **expp)
 {
-  expression_up expr = parse_exp_1 (expp, 0, (struct block *) 0, 1);
+  expression_up expr = parse_exp_1 (expp, 0, nullptr, 1);
 
   return evaluate_expression (expr.get ());
 }
@@ -201,11 +201,11 @@ fetch_subexp_value (struct expression *exp, int *pc, struct value **valp,
   mark = value_mark ();
   result = NULL;
 
-  TRY
+  try
     {
       result = evaluate_subexp (NULL_TYPE, exp, pc, EVAL_NORMAL);
     }
-  CATCH (ex, RETURN_MASK_ALL)
+  catch (const gdb_exception &ex)
     {
       /* Ignore memory errors if we want watchpoints pointing at
 	 inaccessible memory to still be created; otherwise, throw the
@@ -217,11 +217,10 @@ fetch_subexp_value (struct expression *exp, int *pc, struct value **valp,
 	    break;
 	  /* Fall through.  */
 	default:
-	  throw_exception (ex);
+	  throw;
 	  break;
 	}
     }
-  END_CATCH
 
   new_mark = value_mark ();
   if (mark == new_mark)
@@ -238,15 +237,14 @@ fetch_subexp_value (struct expression *exp, int *pc, struct value **valp,
       else
 	{
 
-	  TRY
+	  try
 	    {
 	      value_fetch_lazy (result);
 	      *valp = result;
 	    }
-	  CATCH (except, RETURN_MASK_ERROR)
+	  catch (const gdb_exception_error &except)
 	    {
 	    }
-	  END_CATCH
 	}
     }
 
@@ -716,19 +714,18 @@ evaluate_var_value (enum noside noside, const block *blk, symbol *var)
 
   struct value *ret = NULL;
 
-  TRY
+  try
     {
       ret = value_of_variable (var, blk);
     }
 
-  CATCH (except, RETURN_MASK_ERROR)
+  catch (const gdb_exception_error &except)
     {
       if (noside != EVAL_AVOID_SIDE_EFFECTS)
-	throw_exception (except);
+	throw;
 
       ret = value_zero (SYMBOL_TYPE (var), not_lval);
     }
-  END_CATCH
 
   return ret;
 }
@@ -957,19 +954,18 @@ evaluate_funcall (type *expect_type, expression *exp, int *pos,
 	  while (unop_user_defined_p (op, arg2))
 	    {
 	      struct value *value = NULL;
-	      TRY
+	      try
 		{
 		  value = value_x_unop (arg2, op, noside);
 		}
 
-	      CATCH (except, RETURN_MASK_ERROR)
+	      catch (const gdb_exception_error &except)
 		{
 		  if (except.error == NOT_FOUND_ERROR)
 		    break;
 		  else
-		    throw_exception (except);
+		    throw;
 		}
-	      END_CATCH
 
 		arg2 = value;
 	    }
@@ -1979,6 +1975,7 @@ evaluate_subexp_standard (struct type *expect_type,
 
 	case TYPE_CODE_PTR:
 	case TYPE_CODE_FUNC:
+	case TYPE_CODE_INTERNAL_FUNCTION:
 	  /* It's a function call.  */
 	  /* Allocate arg vector, including space for the function to be
 	     called in argvec[0] and a terminating NULL.  */
@@ -1987,7 +1984,23 @@ evaluate_subexp_standard (struct type *expect_type,
 	  argvec[0] = arg1;
 	  tem = 1;
 	  for (; tem <= nargs; tem++)
-	    argvec[tem] = evaluate_subexp_with_coercion (exp, pos, noside);
+	    {
+	      argvec[tem] = evaluate_subexp_with_coercion (exp, pos, noside);
+	      /* Arguments in Fortran are passed by address.  Coerce the
+		 arguments here rather than in value_arg_coerce as otherwise
+		 the call to malloc to place the non-lvalue parameters in
+		 target memory is hit by this Fortran specific logic.  This
+		 results in malloc being called with a pointer to an integer
+		 followed by an attempt to malloc the arguments to malloc in
+		 target memory.  Infinite recursion ensues.  */
+	      if (code == TYPE_CODE_PTR || code == TYPE_CODE_FUNC)
+		{
+		  bool is_artificial
+		    = TYPE_FIELD_ARTIFICIAL (value_type (arg1), tem - 1);
+		  argvec[tem] = fortran_argument_convert (argvec[tem],
+							  is_artificial);
+		}
+	    }
 	  argvec[tem] = 0;	/* signal end of arglist */
 	  if (noside == EVAL_SKIP)
 	    return eval_skip_value (exp);
@@ -2030,19 +2043,18 @@ evaluate_subexp_standard (struct type *expect_type,
       while (unop_user_defined_p (op, arg1))
 	{
 	  struct value *value = NULL;
-	  TRY
+	  try
 	    {
 	      value = value_x_unop (arg1, op, noside);
 	    }
 
-	  CATCH (except, RETURN_MASK_ERROR)
+	  catch (const gdb_exception_error &except)
 	    {
 	      if (except.error == NOT_FOUND_ERROR)
 		break;
 	      else
-		throw_exception (except);
+		throw;
 	    }
-	  END_CATCH
 
 	  arg1 = value;
 	}

@@ -26,6 +26,7 @@
 #include "language.h"
 #include "varobj.h"
 #include "c-lang.h"
+#include "gdbarch.h"
 
 /* This macro generates enum values from a given type.  */
 
@@ -1087,7 +1088,8 @@ extern const struct language_defn opencl_language_defn =
   &default_varobj_ops,
   NULL,
   NULL,
-  LANG_MAGIC
+  c_is_string_type_p,
+  "{...}"			/* la_struct_too_deep_ellipsis */
 };
 
 static void *

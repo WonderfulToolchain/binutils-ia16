@@ -30,10 +30,10 @@
 #include "inferior.h"
 #include <sys/stat.h>
 #include "inf-child.h"
-#include "fileio.h"
-#include "agent.h"
-#include "gdb_wait.h"
-#include "filestuff.h"
+#include "gdbsupport/fileio.h"
+#include "gdbsupport/agent.h"
+#include "gdbsupport/gdb_wait.h"
+#include "gdbsupport/filestuff.h"
 
 #include <sys/types.h>
 #include <fcntl.h>

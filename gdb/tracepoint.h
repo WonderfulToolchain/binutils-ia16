@@ -21,7 +21,7 @@
 
 #include "breakpoint.h"
 #include "memrange.h"
-#include "gdb_vecs.h"
+#include "gdbsupport/gdb_vecs.h"
 
 #include <vector>
 #include <string>

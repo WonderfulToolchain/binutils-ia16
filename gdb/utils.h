@@ -22,8 +22,11 @@
 #define UTILS_H
 
 #include "exceptions.h"
-#include "common/scoped_restore.h"
+#include "gdbsupport/scoped_restore.h"
 #include <chrono>
+
+struct completion_match_for_lcd;
+class compiled_regex;
 
 extern void initialize_utils (void);
 
@@ -188,7 +191,7 @@ public:
   /* Return the underlying array, transferring ownership to the
      caller.  */
 
-  char **release ()
+  ATTRIBUTE_UNUSED_RESULT char **release ()
   {
     char **result = m_argv;
     m_argv = NULL;
@@ -260,8 +263,6 @@ struct htab_deleter
 /* A unique_ptr wrapper for htab_t.  */
 typedef std::unique_ptr<htab, htab_deleter> htab_up;
 
-extern void free_current_contents (void *);
-
 extern void init_page_info (void);
 
 /* Temporarily set BATCH_FLAG and the associated unlimited terminal size.
@@ -286,7 +287,6 @@ private:
   int m_save_batch_flag;
 };
 
-extern struct cleanup *make_bpstat_clear_actions_cleanup (void);
 
 /* Path utilities.  */
 
@@ -439,13 +439,15 @@ extern void fputs_styled (const char *linebuffer,
 			  const ui_file_style &style,
 			  struct ui_file *stream);
 
+/* Like fputs_styled, but uses highlight_style to highlight the
+   parts of STR that match HIGHLIGHT.  */
+
+extern void fputs_highlighted (const char *str, const compiled_regex &highlight,
+			       struct ui_file *stream);
+
 /* Reset the terminal style to the default, if needed.  */
 
 extern void reset_terminal_style (struct ui_file *stream);
-
-/* Return true if ANSI escapes can be used on STREAM.  */
-
-extern bool can_emit_style_escape (struct ui_file *stream);
 
 /* Display the host ADDR on STREAM formatted as ``0x%x''.  */
 extern void gdb_print_host_address_1 (const void *addr, struct ui_file *stream);

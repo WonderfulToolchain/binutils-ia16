@@ -680,19 +680,20 @@ gdbscm_lookup_block (SCM pc_scm)
 
   gdbscm_parse_function_args (FUNC_NAME, SCM_ARG1, NULL, "U", pc_scm, &pc);
 
-  TRY
+  gdbscm_gdb_exception exc {};
+  try
     {
       cust = find_pc_compunit_symtab (pc);
 
       if (cust != NULL && COMPUNIT_OBJFILE (cust) != NULL)
 	block = block_for_pc (pc);
     }
-  CATCH (except, RETURN_MASK_ALL)
+  catch (const gdb_exception &except)
     {
-      GDBSCM_HANDLE_GDB_EXCEPTION (except);
+      exc = unpack (except);
     }
-  END_CATCH
 
+  GDBSCM_HANDLE_GDB_EXCEPTION (exc);
   if (cust == NULL || COMPUNIT_OBJFILE (cust) == NULL)
     {
       gdbscm_out_of_range_error (FUNC_NAME, SCM_ARG1, pc_scm,

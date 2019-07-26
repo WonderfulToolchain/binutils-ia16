@@ -23,6 +23,7 @@
 #include "gdbtypes.h"
 #include "value.h"
 #include "language.h"
+#include "c-lang.h"
 #include "expression.h"
 #include "gdbcore.h"
 #include "gdbcmd.h"
@@ -45,12 +46,13 @@
 #include "charset.h"
 #include "arch-utils.h"
 #include "cli/cli-utils.h"
+#include "cli/cli-option.h"
 #include "cli/cli-script.h"
 #include "cli/cli-style.h"
-#include "format.h"
+#include "gdbsupport/format.h"
 #include "source.h"
-#include "common/byte-vector.h"
-#include "cli/cli-style.h"
+#include "gdbsupport/byte-vector.h"
+#include "gdbsupport/gdb_optional.h"
 
 /* Last specified output format.  */
 
@@ -1099,7 +1101,6 @@ do_examine (struct format_data fmt, struct gdbarch *gdbarch, CORE_ADDR addr)
 	    count += branch_delay_insns;
 	}
       printf_filtered ("\n");
-      gdb_flush (gdb_stdout);
     }
 
   if (need_to_update_next_address)
@@ -1119,40 +1120,41 @@ validate_format (struct format_data fmt, const char *cmdname)
 	   fmt.format, cmdname);
 }
 
-/* Parse print command format string into *FMTP and update *EXPP.
+/* Parse print command format string into *OPTS and update *EXPP.
    CMDNAME should name the current command.  */
 
 void
 print_command_parse_format (const char **expp, const char *cmdname,
-			    struct format_data *fmtp)
+			    value_print_options *opts)
 {
   const char *exp = *expp;
 
   if (exp && *exp == '/')
     {
+      format_data fmt;
+
       exp++;
-      *fmtp = decode_format (&exp, last_format, 0);
-      validate_format (*fmtp, cmdname);
-      last_format = fmtp->format;
+      fmt = decode_format (&exp, last_format, 0);
+      validate_format (fmt, cmdname);
+      last_format = fmt.format;
+
+      opts->format = fmt.format;
+      opts->raw = fmt.raw;
     }
   else
     {
-      fmtp->count = 1;
-      fmtp->format = 0;
-      fmtp->size = 0;
-      fmtp->raw = 0;
+      opts->format = 0;
+      opts->raw = 0;
     }
 
   *expp = exp;
 }
 
-/* Print VAL to console according to *FMTP, including recording it to
-   the history.  */
+/* See valprint.h.  */
 
 void
-print_value (struct value *val, const struct format_data *fmtp)
+print_value (value *val, const value_print_options &opts)
 {
-  struct value_print_options opts;
   int histindex = record_latest_value (val);
 
   annotate_value_history_begin (histindex, value_type (val));
@@ -1161,28 +1163,31 @@ print_value (struct value *val, const struct format_data *fmtp)
 
   annotate_value_history_value ();
 
-  get_formatted_print_options (&opts, fmtp->format);
-  opts.raw = fmtp->raw;
-
-  print_formatted (val, fmtp->size, &opts, gdb_stdout);
+  print_formatted (val, 0, &opts, gdb_stdout);
   printf_filtered ("\n");
 
   annotate_value_history_end ();
 }
 
-/* Evaluate string EXP as an expression in the current language and
-   print the resulting value.  EXP may contain a format specifier as the
-   first argument ("/x myvar" for example, to print myvar in hex).  */
+/* Implementation of the "print" and "call" commands.  */
 
 static void
-print_command_1 (const char *exp, int voidprint)
+print_command_1 (const char *args, int voidprint)
 {
   struct value *val;
-  struct format_data fmt;
+  value_print_options print_opts;
 
-  print_command_parse_format (&exp, "print", &fmt);
+  get_user_print_options (&print_opts);
+  /* Override global settings with explicit options, if any.  */
+  auto group = make_value_print_options_def_group (&print_opts);
+  gdb::option::process_options
+    (&args, gdb::option::PROCESS_OPTIONS_REQUIRE_DELIMITER, group);
 
-  if (exp && *exp)
+  print_command_parse_format (&args, "print", &print_opts);
+
+  const char *exp = args;
+
+  if (exp != nullptr && *exp)
     {
       expression_up expr = parse_expression (exp);
       val = evaluate_expression (expr.get ());
@@ -1192,7 +1197,23 @@ print_command_1 (const char *exp, int voidprint)
 
   if (voidprint || (val && value_type (val) &&
 		    TYPE_CODE (value_type (val)) != TYPE_CODE_VOID))
-    print_value (val, &fmt);
+    print_value (val, print_opts);
+}
+
+/* See valprint.h.  */
+
+void
+print_command_completer (struct cmd_list_element *ignore,
+			 completion_tracker &tracker,
+			 const char *text, const char * /*word*/)
+{
+  const auto group = make_value_print_options_def_group (nullptr);
+  if (gdb::option::complete_options
+      (tracker, &text, gdb::option::PROCESS_OPTIONS_REQUIRE_DELIMITER, group))
+    return;
+
+  const char *word = advance_to_expression_complete_word_point (tracker, text);
+  expression_completer (ignore, tracker, text, word);
 }
 
 static void
@@ -1282,7 +1303,7 @@ info_symbol_command (const char *arg, int from_tty)
     error_no_arg (_("address"));
 
   addr = parse_and_eval_address (arg);
-  for (objfile *objfile : all_objfiles (current_program_space))
+  for (objfile *objfile : current_program_space->objfiles ())
     ALL_OBJFILE_OSECTIONS (objfile, osect)
       {
 	/* Only process each object file once, even if there's a separate
@@ -1717,14 +1738,14 @@ display_command (const char *arg, int from_tty)
       fmt.raw = 0;
     }
 
-  innermost_block.reset ();
-  expression_up expr = parse_expression (exp);
+  innermost_block_tracker tracker;
+  expression_up expr = parse_expression (exp, &tracker);
 
   newobj = new display ();
 
   newobj->exp_string = xstrdup (exp);
   newobj->exp = std::move (expr);
-  newobj->block = innermost_block.block ();
+  newobj->block = tracker.block ();
   newobj->pspace = current_program_space;
   newobj->number = ++display_number;
   newobj->format = fmt;
@@ -1883,21 +1904,20 @@ do_one_display (struct display *d)
   if (d->exp == NULL)
     {
 
-      TRY
+      try
 	{
-	  innermost_block.reset ();
-	  d->exp = parse_expression (d->exp_string);
-	  d->block = innermost_block.block ();
+	  innermost_block_tracker tracker;
+	  d->exp = parse_expression (d->exp_string, &tracker);
+	  d->block = tracker.block ();
 	}
-      CATCH (ex, RETURN_MASK_ALL)
+      catch (const gdb_exception &ex)
 	{
 	  /* Can't re-parse the expression.  Disable this display item.  */
 	  d->enabled_p = 0;
 	  warning (_("Unable to display \"%s\": %s"),
-		   d->exp_string, ex.message);
+		   d->exp_string, ex.what ());
 	  return;
 	}
-      END_CATCH
     }
 
   if (d->block)
@@ -1944,7 +1964,7 @@ do_one_display (struct display *d)
 
       annotate_display_value ();
 
-      TRY
+      try
         {
 	  struct value *val;
 	  CORE_ADDR addr;
@@ -1955,11 +1975,11 @@ do_one_display (struct display *d)
 	    addr = gdbarch_addr_bits_remove (d->exp->gdbarch, addr);
 	  do_examine (d->format, d->exp->gdbarch, addr);
 	}
-      CATCH (ex, RETURN_MASK_ERROR)
+      catch (const gdb_exception_error &ex)
 	{
-	  fprintf_filtered (gdb_stdout, _("<error: %s>\n"), ex.message);
+	  fprintf_filtered (gdb_stdout, _("<error: %s>\n"),
+			    ex.what ());
 	}
-      END_CATCH
     }
   else
     {
@@ -1982,18 +2002,17 @@ do_one_display (struct display *d)
       get_formatted_print_options (&opts, d->format.format);
       opts.raw = d->format.raw;
 
-      TRY
+      try
         {
 	  struct value *val;
 
 	  val = evaluate_expression (d->exp.get ());
 	  print_formatted (val, d->format.size, &opts, gdb_stdout);
 	}
-      CATCH (ex, RETURN_MASK_ERROR)
+      catch (const gdb_exception_error &ex)
 	{
-	  fprintf_filtered (gdb_stdout, _("<error: %s>"), ex.message);
+	  fprintf_filtered (gdb_stdout, _("<error: %s>"), ex.what ());
 	}
-      END_CATCH
 
       printf_filtered ("\n");
     }
@@ -2069,7 +2088,6 @@ Num Enb Expression\n"));
       if (d->block && !contained_in (get_selected_block (0), d->block))
 	printf_filtered (_(" (cannot be evaluated in the current context)"));
       printf_filtered ("\n");
-      gdb_flush (gdb_stdout);
     }
 }
 
@@ -2176,7 +2194,7 @@ print_variable_and_value (const char *name, struct symbol *var,
   fputs_styled (name, variable_name_style.style (), stream);
   fputs_filtered (" = ", stream);
 
-  TRY
+  try
     {
       struct value *val;
       struct value_print_options opts;
@@ -2194,54 +2212,75 @@ print_variable_and_value (const char *name, struct symbol *var,
 	 function.  */
       frame = NULL;
     }
-  CATCH (except, RETURN_MASK_ERROR)
+  catch (const gdb_exception_error &except)
     {
-      fprintf_filtered(stream, "<error reading variable %s (%s)>", name,
-		       except.message);
+      fprintf_filtered (stream, "<error reading variable %s (%s)>", name,
+			except.what ());
     }
-  END_CATCH
 
   fprintf_filtered (stream, "\n");
 }
 
 /* Subroutine of ui_printf to simplify it.
    Print VALUE to STREAM using FORMAT.
-   VALUE is a C-style string on the target.  */
+   VALUE is a C-style string either on the target or
+   in a GDB internal variable.  */
 
 static void
 printf_c_string (struct ui_file *stream, const char *format,
 		 struct value *value)
 {
-  gdb_byte *str;
-  CORE_ADDR tem;
-  int j;
+  const gdb_byte *str;
 
-  tem = value_as_address (value);
-  if (tem == 0)
+  if (VALUE_LVAL (value) == lval_internalvar
+      && c_is_string_type_p (value_type (value)))
     {
-      DIAGNOSTIC_PUSH
-      DIAGNOSTIC_IGNORE_FORMAT_NONLITERAL
-      fprintf_filtered (stream, format, "(null)");
-      DIAGNOSTIC_POP
-      return;
-    }
+      size_t len = TYPE_LENGTH (value_type (value));
 
-  /* This is a %s argument.  Find the length of the string.  */
-  for (j = 0;; j++)
+      /* Copy the internal var value to TEM_STR and append a terminating null
+	 character.  This protects against corrupted C-style strings that lack
+	 the terminating null char.  It also allows Ada-style strings (not
+	 null terminated) to be printed without problems.  */
+      gdb_byte *tem_str = (gdb_byte *) alloca (len + 1);
+
+      memcpy (tem_str, value_contents (value), len);
+      tem_str [len] = 0;
+      str = tem_str;
+    }
+  else
     {
-      gdb_byte c;
+      CORE_ADDR tem = value_as_address (value);;
 
-      QUIT;
-      read_memory (tem + j, &c, 1);
-      if (c == 0)
-	break;
+      if (tem == 0)
+	{
+	  DIAGNOSTIC_PUSH
+	  DIAGNOSTIC_IGNORE_FORMAT_NONLITERAL
+	  fprintf_filtered (stream, format, "(null)");
+	  DIAGNOSTIC_POP
+	  return;
+	}
+
+      /* This is a %s argument.  Find the length of the string.  */
+      size_t len;
+
+      for (len = 0;; len++)
+	{
+	  gdb_byte c;
+
+	  QUIT;
+	  read_memory (tem + len, &c, 1);
+	  if (c == 0)
+	    break;
+	}
+
+      /* Copy the string contents into a string inside GDB.  */
+      gdb_byte *tem_str = (gdb_byte *) alloca (len + 1);
+
+      if (len != 0)
+	read_memory (tem, tem_str, len);
+      tem_str[len] = 0;
+      str = tem_str;
     }
-
-  /* Copy the string contents into a string inside GDB.  */
-  str = (gdb_byte *) alloca (j + 1);
-  if (j != 0)
-    read_memory (tem, str, j);
-  str[j] = 0;
 
   DIAGNOSTIC_PUSH
   DIAGNOSTIC_IGNORE_FORMAT_NONLITERAL
@@ -2251,52 +2290,65 @@ printf_c_string (struct ui_file *stream, const char *format,
 
 /* Subroutine of ui_printf to simplify it.
    Print VALUE to STREAM using FORMAT.
-   VALUE is a wide C-style string on the target.  */
+   VALUE is a wide C-style string on the target or
+   in a GDB internal variable.  */
 
 static void
 printf_wide_c_string (struct ui_file *stream, const char *format,
 		      struct value *value)
 {
-  gdb_byte *str;
-  CORE_ADDR tem;
-  int j;
+  const gdb_byte *str;
+  size_t len;
   struct gdbarch *gdbarch = get_type_arch (value_type (value));
-  enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
   struct type *wctype = lookup_typename (current_language, gdbarch,
 					 "wchar_t", NULL, 0);
   int wcwidth = TYPE_LENGTH (wctype);
-  gdb_byte *buf = (gdb_byte *) alloca (wcwidth);
 
-  tem = value_as_address (value);
-  if (tem == 0)
+  if (VALUE_LVAL (value) == lval_internalvar
+      && c_is_string_type_p (value_type (value)))
     {
-      DIAGNOSTIC_PUSH
-      DIAGNOSTIC_IGNORE_FORMAT_NONLITERAL
-      fprintf_filtered (stream, format, "(null)");
-      DIAGNOSTIC_POP
-      return;
+      str = value_contents (value);
+      len = TYPE_LENGTH (value_type (value));
     }
-
-  /* This is a %s argument.  Find the length of the string.  */
-  for (j = 0;; j += wcwidth)
+  else
     {
-      QUIT;
-      read_memory (tem + j, buf, wcwidth);
-      if (extract_unsigned_integer (buf, wcwidth, byte_order) == 0)
-	break;
-    }
+      CORE_ADDR tem = value_as_address (value);
 
-  /* Copy the string contents into a string inside GDB.  */
-  str = (gdb_byte *) alloca (j + wcwidth);
-  if (j != 0)
-    read_memory (tem, str, j);
-  memset (&str[j], 0, wcwidth);
+      if (tem == 0)
+	{
+	  DIAGNOSTIC_PUSH
+	  DIAGNOSTIC_IGNORE_FORMAT_NONLITERAL
+	  fprintf_filtered (stream, format, "(null)");
+	  DIAGNOSTIC_POP
+	  return;
+	}
+
+      /* This is a %s argument.  Find the length of the string.  */
+      enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
+      gdb_byte *buf = (gdb_byte *) alloca (wcwidth);
+
+      for (len = 0;; len += wcwidth)
+	{
+	  QUIT;
+	  read_memory (tem + len, buf, wcwidth);
+	  if (extract_unsigned_integer (buf, wcwidth, byte_order) == 0)
+	    break;
+	}
+
+      /* Copy the string contents into a string inside GDB.  */
+      gdb_byte *tem_str = (gdb_byte *) alloca (len + wcwidth);
+
+      if (len != 0)
+	read_memory (tem, tem_str, len);
+      memset (&tem_str[len], 0, wcwidth);
+      str = tem_str;
+    }
 
   auto_obstack output;
 
   convert_between_encodings (target_wide_charset (gdbarch),
 			     host_charset (),
-			     str, j, wcwidth,
+			     str, len, wcwidth,
 			     &output, translit_char);
   obstack_grow_str0 (&output, "");
 
@@ -2657,10 +2709,12 @@ _initialize_printcmd (void)
   gdb::observers::free_objfile.attach (clear_dangling_display_expressions);
 
   add_info ("address", info_address_command,
-	    _("Describe where symbol SYM is stored."));
+	    _("Describe where symbol SYM is stored.\n\
+Usage: info address SYM"));
 
   add_info ("symbol", info_symbol_command, _("\
 Describe what symbol is at location ADDR.\n\
+Usage: info symbol ADDR\n\
 Only for symbols with fixed locations (global or static scope)."));
 
   add_com ("x", class_vars, x_command, _("\
@@ -2678,16 +2732,13 @@ Defaults for format and size letters are those previously used.\n\
 Default count is 1.  Default address is following last thing printed\n\
 with this command or \"print\"."));
 
-#if 0
-  add_com ("whereis", class_vars, whereis_command,
-	   _("Print line number and file of definition of variable."));
-#endif
-
   add_info ("display", info_display_command, _("\
-Expressions to display when program stops, with code numbers."));
+Expressions to display when program stops, with code numbers.\n\
+Usage: info display"));
 
   add_cmd ("undisplay", class_vars, undisplay_command, _("\
 Cancel some expressions to be displayed when program stops.\n\
+Usage: undisplay [NUM]...\n\
 Arguments are the code numbers of the expressions to stop displaying.\n\
 No argument means cancel all automatic-display expressions.\n\
 \"delete display\" has the same effect as this command.\n\
@@ -2696,6 +2747,7 @@ Do \"info display\" to see current list of code numbers."),
 
   add_com ("display", class_vars, display_command, _("\
 Print value of expression EXP each time the program stops.\n\
+Usage: display[/FMT] EXP\n\
 /FMT may be used before EXP as in the \"print\" command.\n\
 /FMT \"i\" or \"s\" or including a size-letter is allowed,\n\
 as in the \"x\" command, and then EXP is used to get the address to examine\n\
@@ -2705,35 +2757,41 @@ Use \"undisplay\" to cancel display requests previously made."));
 
   add_cmd ("display", class_vars, enable_display_command, _("\
 Enable some expressions to be displayed when program stops.\n\
+Usage: enable display [NUM]...\n\
 Arguments are the code numbers of the expressions to resume displaying.\n\
 No argument means enable all automatic-display expressions.\n\
 Do \"info display\" to see current list of code numbers."), &enablelist);
 
   add_cmd ("display", class_vars, disable_display_command, _("\
 Disable some expressions to be displayed when program stops.\n\
+Usage: disable display [NUM]...\n\
 Arguments are the code numbers of the expressions to stop displaying.\n\
 No argument means disable all automatic-display expressions.\n\
 Do \"info display\" to see current list of code numbers."), &disablelist);
 
   add_cmd ("display", class_vars, undisplay_command, _("\
 Cancel some expressions to be displayed when program stops.\n\
+Usage: delete display [NUM]...\n\
 Arguments are the code numbers of the expressions to stop displaying.\n\
 No argument means cancel all automatic-display expressions.\n\
 Do \"info display\" to see current list of code numbers."), &deletelist);
 
   add_com ("printf", class_vars, printf_command, _("\
 Formatted printing, like the C \"printf\" function.\n\
-Usage: printf \"format string\", arg1, arg2, arg3, ..., argn\n\
+Usage: printf \"format string\", ARG1, ARG2, ARG3, ..., ARGN\n\
 This supports most C printf format specifications, like %s, %d, etc."));
 
   add_com ("output", class_vars, output_command, _("\
 Like \"print\" but don't put in value history and don't print newline.\n\
+Usage: output EXP\n\
 This is useful in user-defined commands."));
 
   add_prefix_cmd ("set", class_vars, set_command, _("\
-Evaluate expression EXP and assign result to variable VAR, using assignment\n\
-syntax appropriate for the current language (VAR = EXP or VAR := EXP for\n\
-example).  VAR may be a debugger \"convenience\" variable (names starting\n\
+Evaluate expression EXP and assign result to variable VAR\n\
+Usage: set VAR = EXP\n\
+This uses assignment syntax appropriate for the current language\n\
+(VAR = EXP or VAR := EXP for example).\n\
+VAR may be a debugger \"convenience\" variable (names starting\n\
 with $), a register (a few standard names starting with $), or an actual\n\
 variable in the program being debugged.  EXP is any valid expression.\n\
 Use \"set variable\" for variables with names identical to set subcommands.\n\
@@ -2743,9 +2801,11 @@ You can see these environment settings with the \"show\" command."),
 		  &setlist, "set ", 1, &cmdlist);
   if (dbx_commands)
     add_com ("assign", class_vars, set_command, _("\
-Evaluate expression EXP and assign result to variable VAR, using assignment\n\
-syntax appropriate for the current language (VAR = EXP or VAR := EXP for\n\
-example).  VAR may be a debugger \"convenience\" variable (names starting\n\
+Evaluate expression EXP and assign result to variable VAR\n\
+Usage: assign VAR = EXP\n\
+This uses assignment syntax appropriate for the current language\n\
+(VAR = EXP or VAR := EXP for example).\n\
+VAR may be a debugger \"convenience\" variable (names starting\n\
 with $), a register (a few standard names starting with $), or an actual\n\
 variable in the program being debugged.  EXP is any valid expression.\n\
 Use \"set variable\" for variables with names identical to set subcommands.\n\
@@ -2755,23 +2815,36 @@ You can see these environment settings with the \"show\" command."));
   /* "call" is the same as "set", but handy for dbx users to call fns.  */
   c = add_com ("call", class_vars, call_command, _("\
 Call a function in the program.\n\
+Usage: call EXP\n\
 The argument is the function name and arguments, in the notation of the\n\
 current working language.  The result is printed and saved in the value\n\
 history, if it is not void."));
-  set_cmd_completer (c, expression_completer);
+  set_cmd_completer_handle_brkchars (c, print_command_completer);
 
   add_cmd ("variable", class_vars, set_command, _("\
-Evaluate expression EXP and assign result to variable VAR, using assignment\n\
-syntax appropriate for the current language (VAR = EXP or VAR := EXP for\n\
-example).  VAR may be a debugger \"convenience\" variable (names starting\n\
+Evaluate expression EXP and assign result to variable VAR\n\
+Usage: set variable VAR = EXP\n\
+This uses assignment syntax appropriate for the current language\n\
+(VAR = EXP or VAR := EXP for example).\n\
+VAR may be a debugger \"convenience\" variable (names starting\n\
 with $), a register (a few standard names starting with $), or an actual\n\
 variable in the program being debugged.  EXP is any valid expression.\n\
 This may usually be abbreviated to simply \"set\"."),
 	   &setlist);
   add_alias_cmd ("var", "variable", class_vars, 0, &setlist);
 
-  c = add_com ("print", class_vars, print_command, _("\
+  const auto print_opts = make_value_print_options_def_group (nullptr);
+
+  static const std::string print_help = gdb::option::build_help (N_("\
 Print value of expression EXP.\n\
+Usage: print [[OPTION]... --] [/FMT] [EXP]\n\
+\n\
+Options:\n\
+%OPTIONS%\
+Note: because this command accepts arbitrary expressions, if you\n\
+specify any command option, you must use a double dash (\"--\")\n\
+to mark the end of option processing.  E.g.: \"print -o -- myobj\".\n\
+\n\
 Variables accessible are those of the lexical environment of the selected\n\
 stack frame, plus all those whose scope is global or an entire file.\n\
 \n\
@@ -2791,15 +2864,18 @@ where FOO is stored, etc.  FOO must be an expression whose value\n\
 resides in memory.\n\
 \n\
 EXP may be preceded with /FMT, where FMT is a format letter\n\
-but no count or size letter (see \"x\" command)."));
-  set_cmd_completer (c, expression_completer);
+but no count or size letter (see \"x\" command)."),
+					      print_opts);
+
+  c = add_com ("print", class_vars, print_command, print_help.c_str ());
+  set_cmd_completer_handle_brkchars (c, print_command_completer);
   add_com_alias ("p", "print", class_vars, 1);
   add_com_alias ("inspect", "print", class_vars, 1);
 
   add_setshow_uinteger_cmd ("max-symbolic-offset", no_class,
 			    &max_symbolic_offset, _("\
-Set the largest offset that will be printed in <symbol+1234> form."), _("\
-Show the largest offset that will be printed in <symbol+1234> form."), _("\
+Set the largest offset that will be printed in <SYMBOL+1234> form."), _("\
+Show the largest offset that will be printed in <SYMBOL+1234> form."), _("\
 Tell GDB to only display the symbolic form of an address if the\n\
 offset between the closest earlier symbol and the address is less than\n\
 the specified maximum offset.  The default is \"unlimited\", which tells GDB\n\
@@ -2810,13 +2886,15 @@ it.  Zero is equivalent to \"unlimited\"."),
 			    &setprintlist, &showprintlist);
   add_setshow_boolean_cmd ("symbol-filename", no_class,
 			   &print_symbol_filename, _("\
-Set printing of source filename and line number with <symbol>."), _("\
-Show printing of source filename and line number with <symbol>."), NULL,
+Set printing of source filename and line number with <SYMBOL>."), _("\
+Show printing of source filename and line number with <SYMBOL>."), NULL,
 			   NULL,
 			   show_print_symbol_filename,
 			   &setprintlist, &showprintlist);
 
   add_com ("eval", no_class, eval_command, _("\
-Convert \"printf format string\", arg1, arg2, arg3, ..., argn to\n\
-a command line, and call it."));
+Construct a GDB command and then evaluate it.\n\
+Usage: eval \"format string\", ARG1, ARG2, ARG3, ..., ARGN\n\
+Convert the arguments to a string as \"printf\" would, but then\n\
+treat this string as a command line, and evaluate it."));
 }

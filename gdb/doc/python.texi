@@ -90,8 +90,6 @@ containing @code{end}.  For example:
 
 @smallexample
 (@value{GDBP}) python
-Type python script
-End with a line saying just "end".
 >print 23
 >end
 23
@@ -735,6 +733,14 @@ its result is used.
 @end table
 @end defun
 
+@defun Value.__init__ (@var{val}, @var{type})
+This second form of the @code{gdb.Value} constructor returns a
+@code{gdb.Value} of type @var{type} where the value contents are taken
+from the Python buffer object specified by @var{val}.  The number of
+bytes in the Python buffer object must be greater than or equal to the
+size of @var{type}.
+@end defun
+
 @defun Value.cast (type)
 Return a new instance of @code{gdb.Value} that is the result of
 casting this instance to the type described by @var{type}, which must
@@ -854,6 +860,91 @@ operator were used.  Consult a C@t{++} reference for details.
 @defun Value.reinterpret_cast (type)
 Like @code{Value.cast}, but works as if the C@t{++} @code{reinterpret_cast}
 operator were used.  Consult a C@t{++} reference for details.
+@end defun
+
+@defun Value.format_string (...)
+Convert a @code{gdb.Value} to a string, similarly to what the @code{print}
+command does.  Invoked with no arguments, this is equivalent to calling
+the @code{str} function on the @code{gdb.Value}.  The representation of
+the same value may change across different versions of @value{GDBN}, so
+you shouldn't, for instance, parse the strings returned by this method.
+
+All the arguments are keyword only.  If an argument is not specified, the
+current global default setting is used.
+
+@table @code
+@item raw
+@code{True} if pretty-printers (@pxref{Pretty Printing}) should not be
+used to format the value.  @code{False} if enabled pretty-printers
+matching the type represented by the @code{gdb.Value} should be used to
+format it.
+
+@item pretty_arrays
+@code{True} if arrays should be pretty printed to be more convenient to
+read, @code{False} if they shouldn't (see @code{set print array} in
+@ref{Print Settings}).
+
+@item pretty_structs
+@code{True} if structs should be pretty printed to be more convenient to
+read, @code{False} if they shouldn't (see @code{set print pretty} in
+@ref{Print Settings}).
+
+@item array_indexes
+@code{True} if array indexes should be included in the string
+representation of arrays, @code{False} if they shouldn't (see @code{set
+print array-indexes} in @ref{Print Settings}).
+
+@item symbols
+@code{True} if the string representation of a pointer should include the
+corresponding symbol name (if one exists), @code{False} if it shouldn't
+(see @code{set print symbol} in @ref{Print Settings}).
+
+@item unions
+@code{True} if unions which are contained in other structures or unions
+should be expanded, @code{False} if they shouldn't (see @code{set print
+union} in @ref{Print Settings}).
+
+@item deref_refs
+@code{True} if C@t{++} references should be resolved to the value they
+refer to, @code{False} (the default) if they shouldn't.  Note that, unlike
+for the @code{print} command, references are not automatically expanded
+when using the @code{format_string} method or the @code{str}
+function.  There is no global @code{print} setting to change the default
+behaviour.
+
+@item actual_objects
+@code{True} if the representation of a pointer to an object should
+identify the @emph{actual} (derived) type of the object rather than the
+@emph{declared} type, using the virtual function table.  @code{False} if
+the @emph{declared} type should be used.  (See @code{set print object} in
+@ref{Print Settings}).
+
+@item static_fields
+@code{True} if static members should be included in the string
+representation of a C@t{++} object, @code{False} if they shouldn't (see
+@code{set print static-members} in @ref{Print Settings}).
+
+@item max_elements
+Number of array elements to print, or @code{0} to print an unlimited
+number of elements (see @code{set print elements} in @ref{Print
+Settings}).
+
+@item max_depth
+The maximum depth to print for nested structs and unions, or @code{-1}
+to print an unlimited number of elements (see @code{set print
+max-depth} in @ref{Print Settings}).
+
+@item repeat_threshold
+Set the threshold for suppressing display of repeated array elements, or
+@code{0} to represent all elements, even if repeated.  (See @code{set
+print repeats} in @ref{Print Settings}).
+
+@item format
+A string containing a single character representing the format to use for
+the returned string.  For instance, @code{'x'} is equivalent to using the
+@value{GDBN} command @code{print} with the @code{/x} option and formats
+the value as a hexadecimal number.
+@end table
 @end defun
 
 @defun Value.string (@r{[}encoding@r{[}, errors@r{[}, length@r{]]]})
@@ -992,6 +1083,11 @@ The tag name for this type.  The tag name is the name after
 @code{struct}, @code{union}, or @code{enum} in C and C@t{++}; not all
 languages have this concept.  If this type has no tag name, then
 @code{None} is returned.
+@end defvar
+
+@defvar Type.objfile
+The @code{gdb.Objfile} that this type was defined in, or @code{None} if
+there is no associated objfile.
 @end defvar
 
 The following methods are provided:
@@ -1277,6 +1373,15 @@ object which is convertible to a @value{GDBN} value.
 
 This method is optional.  If it does not exist, @value{GDBN} will act
 as though the value has no children.
+
+For efficiency, the @code{children} method should lazily compute its
+results.  This will let @value{GDBN} read as few elements as
+necessary, for example when various print settings (@pxref{Print
+Settings}) or @code{-var-list-children} (@pxref{GDB/MI Variable
+Objects}) limit the number of elements to be displayed.
+
+Children may be hidden from display based on the value of @samp{set
+print max-depth} (@pxref{Print Settings}).
 @end defun
 
 @defun pretty_printer.display_hint (self)
@@ -1286,7 +1391,7 @@ consumer as a @samp{displayhint} attribute of the variable being
 printed.
 
 This method is optional.  If it does exist, this method must return a
-string.
+string or the special value @code{None}.
 
 Some display hints are predefined by @value{GDBN}:
 
@@ -1309,6 +1414,9 @@ string-printing function to format the string.  For the CLI this means
 adding quotation marks, possibly escaping some characters, respecting
 @code{set print elements}, and the like.
 @end table
+
+The special value @code{None} causes @value{GDBN} to apply the default
+display rules.
 @end defun
 
 @defun pretty_printer.to_string (self)
@@ -1355,10 +1463,21 @@ printer exists, then this returns @code{None}.
 @subsubsection Selecting Pretty-Printers
 @cindex selecting python pretty-printers
 
+@value{GDBN} provides several ways to register a pretty-printer:
+globally, per program space, and per objfile.  When choosing how to
+register your pretty-printer, a good rule is to register it with the
+smallest scope possible: that is prefer a specific objfile first, then
+a program space, and only register a printer globally as a last
+resort.
+
+@findex gdb.pretty_printers
+@defvar gdb.pretty_printers
 The Python list @code{gdb.pretty_printers} contains an array of
 functions or callable objects that have been registered via addition
 as a pretty-printer.  Printers in this list are called @code{global}
 printers, they're available when debugging all inferiors.
+@end defvar
+
 Each @code{gdb.Progspace} contains a @code{pretty_printers} attribute.
 Each @code{gdb.Objfile} also contains a @code{pretty_printers}
 attribute.
@@ -2898,11 +3017,16 @@ containing the address where the pattern was found, or @code{None} if
 the pattern could not be found.
 @end defun
 
+@findex Inferior.thread_from_handle
 @findex Inferior.thread_from_thread_handle
-@defun Inferior.thread_from_thread_handle (thread_handle)
-Return the thread object corresponding to @var{thread_handle}, a thread
+@defun Inferior.thread_from_handle (handle)
+Return the thread object corresponding to @var{handle}, a thread
 library specific data structure such as @code{pthread_t} for pthreads
 library implementations.
+
+The function @code{Inferior.thread_from_thread_handle} provides
+the same functionality, but use of @code{Inferior.thread_from_thread_handle}
+is deprecated.
 @end defun
 
 @node Events In Python
@@ -3230,6 +3354,14 @@ Return a Boolean indicating whether the thread is running.
 
 @defun InferiorThread.is_exited ()
 Return a Boolean indicating whether the thread is exited.
+@end defun
+
+@defun InferiorThread.handle ()
+Return the thread object's handle, represented as a Python @code{bytes}
+object.  A @code{gdb.Value} representation of the handle may be
+constructed via @code{gdb.Value(bufobj, type)} where @var{bufobj} is
+the Python @code{bytes} representation of the handle and @var{type} is
+a @code{gdb.Type} for the handle type.
 @end defun
 
 @node Recordings In Python

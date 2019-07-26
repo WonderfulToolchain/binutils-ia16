@@ -1002,11 +1002,54 @@ extern void bfd_elf64_aarch64_init_maps
 extern void bfd_elf32_aarch64_init_maps
   (bfd *);
 
+/* Types of PLTs based on the level of security.  This would be a
+   bit-mask to denote which of the combinations of security features
+   are enabled:
+   - No security feature PLTs
+   - PLTs with BTI instruction
+   - PLTs with PAC instruction
+*/
+typedef enum
+{
+  PLT_NORMAL	= 0x0,  /* Normal plts.  */
+  PLT_BTI	= 0x1,  /* plts with bti.  */
+  PLT_PAC	= 0x2,  /* plts with pointer authentication.  */
+  PLT_BTI_PAC	= PLT_BTI | PLT_PAC
+} aarch64_plt_type;
+
+/* To indicate if BTI is enabled with/without warning.  */
+typedef enum
+{
+  BTI_NONE	= 0,  /* BTI is not enabled.  */
+  BTI_WARN	= 1,  /* BTI is enabled with -z force-bti.  */
+} aarch64_enable_bti_type;
+
+/* A structure to encompass all information coming from BTI or PAC
+   related command line options.  This involves the "PLT_TYPE" to determine
+   which version of PLTs to pick and "BTI_TYPE" to determine if
+   BTI should be turned on with any warnings.   */
+typedef struct
+{
+  aarch64_plt_type plt_type;
+  aarch64_enable_bti_type bti_type;
+} aarch64_bti_pac_info;
+
+/* An enum to define what kind of erratum fixes we should apply.  This gives the
+   user a bit more control over the sequences we generate.  */
+typedef enum
+{
+  ERRAT_NONE  = (1 << 0),  /* No erratum workarounds allowed.  */
+  ERRAT_ADR   = (1 << 1),  /* Erratum workarounds using ADR allowed.  */
+  ERRAT_ADRP  = (1 << 2),  /* Erratum workarounds using ADRP are allowed.  */
+} erratum_84319_opts;
+
 extern void bfd_elf64_aarch64_set_options
-  (bfd *, struct bfd_link_info *, int, int, int, int, int, int);
+  (bfd *, struct bfd_link_info *, int, int, int, int, erratum_84319_opts, int,
+   aarch64_bti_pac_info);
 
 extern void bfd_elf32_aarch64_set_options
-  (bfd *, struct bfd_link_info *, int, int, int, int, int, int);
+  (bfd *, struct bfd_link_info *, int, int, int, int, erratum_84319_opts, int,
+   aarch64_bti_pac_info);
 
 /* ELF AArch64 mapping symbol support.  */
 #define BFD_AARCH64_SPECIAL_SYM_TYPE_MAP	(1 << 0)
@@ -2240,6 +2283,7 @@ enum bfd_architecture
 #define bfd_mach_arm_8R        24
 #define bfd_mach_arm_8M_BASE   25
 #define bfd_mach_arm_8M_MAIN   26
+#define bfd_mach_arm_8_1M_MAIN 27
   bfd_arch_nds32,     /* Andes NDS32.  */
 #define bfd_mach_n1            1
 #define bfd_mach_n1h           2
@@ -2313,6 +2357,8 @@ enum bfd_architecture
  bfd_arch_iq2000,     /* Vitesse IQ2000.  */
 #define bfd_mach_iq2000        1
 #define bfd_mach_iq10          2
+  bfd_arch_bpf,       /* Linux eBPF.  */
+#define bfd_mach_bpf           1
   bfd_arch_epiphany,  /* Adapteva EPIPHANY.  */
 #define bfd_mach_epiphany16    1
 #define bfd_mach_epiphany32    2
@@ -3455,6 +3501,23 @@ instruction.  */
   BFD_RELOC_PPC64_ADDR64_LOCAL,
   BFD_RELOC_PPC64_ENTRY,
   BFD_RELOC_PPC64_REL24_NOTOC,
+  BFD_RELOC_PPC64_D34,
+  BFD_RELOC_PPC64_D34_LO,
+  BFD_RELOC_PPC64_D34_HI30,
+  BFD_RELOC_PPC64_D34_HA30,
+  BFD_RELOC_PPC64_PCREL34,
+  BFD_RELOC_PPC64_GOT_PCREL34,
+  BFD_RELOC_PPC64_PLT_PCREL34,
+  BFD_RELOC_PPC64_ADDR16_HIGHER34,
+  BFD_RELOC_PPC64_ADDR16_HIGHERA34,
+  BFD_RELOC_PPC64_ADDR16_HIGHEST34,
+  BFD_RELOC_PPC64_ADDR16_HIGHESTA34,
+  BFD_RELOC_PPC64_REL16_HIGHER34,
+  BFD_RELOC_PPC64_REL16_HIGHERA34,
+  BFD_RELOC_PPC64_REL16_HIGHEST34,
+  BFD_RELOC_PPC64_REL16_HIGHESTA34,
+  BFD_RELOC_PPC64_D28,
+  BFD_RELOC_PPC64_PCREL28,
 
 /* PowerPC and PowerPC64 thread-local storage relocations.  */
   BFD_RELOC_PPC_TLS,
@@ -3489,20 +3552,27 @@ instruction.  */
   BFD_RELOC_PPC_GOT_DTPREL16_HA,
   BFD_RELOC_PPC64_TPREL16_DS,
   BFD_RELOC_PPC64_TPREL16_LO_DS,
+  BFD_RELOC_PPC64_TPREL16_HIGH,
+  BFD_RELOC_PPC64_TPREL16_HIGHA,
   BFD_RELOC_PPC64_TPREL16_HIGHER,
   BFD_RELOC_PPC64_TPREL16_HIGHERA,
   BFD_RELOC_PPC64_TPREL16_HIGHEST,
   BFD_RELOC_PPC64_TPREL16_HIGHESTA,
   BFD_RELOC_PPC64_DTPREL16_DS,
   BFD_RELOC_PPC64_DTPREL16_LO_DS,
+  BFD_RELOC_PPC64_DTPREL16_HIGH,
+  BFD_RELOC_PPC64_DTPREL16_HIGHA,
   BFD_RELOC_PPC64_DTPREL16_HIGHER,
   BFD_RELOC_PPC64_DTPREL16_HIGHERA,
   BFD_RELOC_PPC64_DTPREL16_HIGHEST,
   BFD_RELOC_PPC64_DTPREL16_HIGHESTA,
-  BFD_RELOC_PPC64_TPREL16_HIGH,
-  BFD_RELOC_PPC64_TPREL16_HIGHA,
-  BFD_RELOC_PPC64_DTPREL16_HIGH,
-  BFD_RELOC_PPC64_DTPREL16_HIGHA,
+  BFD_RELOC_PPC64_TPREL34,
+  BFD_RELOC_PPC64_DTPREL34,
+  BFD_RELOC_PPC64_GOT_TLSGD34,
+  BFD_RELOC_PPC64_GOT_TLSLD34,
+  BFD_RELOC_PPC64_GOT_TPREL34,
+  BFD_RELOC_PPC64_GOT_DTPREL34,
+  BFD_RELOC_PPC64_TLS_PCREL,
 
 /* IBM 370/390 relocations  */
   BFD_RELOC_I370_D12,
@@ -3531,6 +3601,24 @@ field in the instruction.  */
 
 /* ARM 26-bit pc-relative branch for B or conditional BL instruction.  */
   BFD_RELOC_ARM_PCREL_JUMP,
+
+/* ARM 5-bit pc-relative branch for Branch Future instructions.  */
+  BFD_RELOC_THUMB_PCREL_BRANCH5,
+
+/* ARM 6-bit pc-relative branch for BFCSEL instruction.  */
+  BFD_RELOC_THUMB_PCREL_BFCSEL,
+
+/* ARM 17-bit pc-relative branch for Branch Future instructions.  */
+  BFD_RELOC_ARM_THUMB_BF17,
+
+/* ARM 13-bit pc-relative branch for BFCSEL instruction.  */
+  BFD_RELOC_ARM_THUMB_BF13,
+
+/* ARM 19-bit pc-relative branch for Branch Future Link instruction.  */
+  BFD_RELOC_ARM_THUMB_BF19,
+
+/* ARM 12-bit pc-relative branch for Low Overhead Loop instructions.  */
+  BFD_RELOC_ARM_THUMB_LOOP12,
 
 /* Thumb 7-, 9-, 12-, 20-, 23-, and 25-bit pc-relative branches.
 The lowest bit must be zero and is not stored in the instruction.
@@ -3672,6 +3760,7 @@ pc-relative or some form of GOT-indirect relocation.  */
   BFD_RELOC_ARM_CP_OFF_IMM_S2,
   BFD_RELOC_ARM_T32_CP_OFF_IMM,
   BFD_RELOC_ARM_T32_CP_OFF_IMM_S2,
+  BFD_RELOC_ARM_T32_VLDR_VSTR_OFF_IMM,
   BFD_RELOC_ARM_ADR_IMM,
   BFD_RELOC_ARM_LDR_IMM,
   BFD_RELOC_ARM_LITERAL,
@@ -6591,6 +6680,13 @@ assembler and not (currently) written to any object files.  */
   BFD_RELOC_TILEGX_IMM8_Y0_TLS_ADD,
   BFD_RELOC_TILEGX_IMM8_Y1_TLS_ADD,
 
+/* Linux eBPF relocations.  */
+  BFD_RELOC_BPF_64,
+  BFD_RELOC_BPF_32,
+  BFD_RELOC_BPF_16,
+  BFD_RELOC_BPF_DISP16,
+  BFD_RELOC_BPF_DISP32,
+
 /* Adapteva EPIPHANY - 8 bit signed pc-relative displacement  */
   BFD_RELOC_EPIPHANY_SIMM8,
 
@@ -6699,6 +6795,9 @@ assembler and not (currently) written to any object files.  */
   BFD_RELOC_CKCORE_IRELATIVE,
   BFD_RELOC_CKCORE_PCREL_BLOOP_IMM4BY4,
   BFD_RELOC_CKCORE_PCREL_BLOOP_IMM12BY4,
+
+/* S12Z relocations.  */
+  BFD_RELOC_S12Z_OPR,
   BFD_RELOC_UNUSED };
 
 typedef enum bfd_reloc_code_real bfd_reloc_code_real_type;

@@ -75,7 +75,7 @@ struct objc_method {
   CORE_ADDR imp;
 };
 
-static const struct objfile_data *objc_objfile_data;
+static const struct objfile_key<unsigned int> objc_objfile_data;
 
 /* Lookup a structure type named "struct NAME", visible in lexical
    block BLOCK.  If NOERR is nonzero, return zero if NAME is not
@@ -409,7 +409,8 @@ extern const struct language_defn objc_language_defn = {
   &default_varobj_ops,
   NULL,
   NULL,
-  LANG_MAGIC
+  c_is_string_type_p,
+  "{...}"			/* la_struct_too_deep_ellipsis */
 };
 
 /*
@@ -491,7 +492,7 @@ end_msglist (struct parser_state *ps)
   selname_chain = sel->next;
   msglist_len = sel->msglist_len;
   msglist_sel = sel->msglist_sel;
-  selid = lookup_child_selector (parse_gdbarch (ps), p);
+  selid = lookup_child_selector (ps->gdbarch (), p);
   if (!selid)
     error (_("Can't find selector \"%s\""), p);
   write_exp_elt_longcst (ps, selid);
@@ -605,9 +606,9 @@ info_selectors_command (const char *regexp, int from_tty)
     }
 
   /* First time thru is JUST to get max length and count.  */
-  for (objfile *objfile : all_objfiles (current_program_space))
+  for (objfile *objfile : current_program_space->objfiles ())
     {
-      for (minimal_symbol *msymbol : objfile_msymbols (objfile))
+      for (minimal_symbol *msymbol : objfile->msymbols ())
 	{
 	  QUIT;
 	  name = MSYMBOL_NATURAL_NAME (msymbol);
@@ -645,9 +646,9 @@ info_selectors_command (const char *regexp, int from_tty)
 
       sym_arr = XALLOCAVEC (struct symbol *, matches);
       matches = 0;
-      for (objfile *objfile : all_objfiles (current_program_space))
+      for (objfile *objfile : current_program_space->objfiles ())
 	{
-	  for (minimal_symbol *msymbol : objfile_msymbols (objfile))
+	  for (minimal_symbol *msymbol : objfile->msymbols ())
 	    {
 	      QUIT;
 	      name = MSYMBOL_NATURAL_NAME (msymbol);
@@ -759,9 +760,9 @@ info_classes_command (const char *regexp, int from_tty)
     }
 
   /* First time thru is JUST to get max length and count.  */
-  for (objfile *objfile : all_objfiles (current_program_space))
+  for (objfile *objfile : current_program_space->objfiles ())
     {
-      for (minimal_symbol *msymbol : objfile_msymbols (objfile))
+      for (minimal_symbol *msymbol : objfile->msymbols ())
 	{
 	  QUIT;
 	  name = MSYMBOL_NATURAL_NAME (msymbol);
@@ -786,9 +787,9 @@ info_classes_command (const char *regexp, int from_tty)
 		       regexp ? regexp : "*");
       sym_arr = XALLOCAVEC (struct symbol *, matches);
       matches = 0;
-      for (objfile *objfile : all_objfiles (current_program_space))
+      for (objfile *objfile : current_program_space->objfiles ())
 	{
-	  for (minimal_symbol *msymbol : objfile_msymbols (objfile))
+	  for (minimal_symbol *msymbol : objfile->msymbols ())
 	    {
 	      QUIT;
 	      name = MSYMBOL_NATURAL_NAME (msymbol);
@@ -992,7 +993,7 @@ find_methods (char type, const char *theclass, const char *category,
 
   gdb_assert (symbol_names != NULL);
 
-  for (objfile *objfile : all_objfiles (current_program_space))
+  for (objfile *objfile : current_program_space->objfiles ())
     {
       unsigned int *objc_csym;
 
@@ -1003,12 +1004,12 @@ find_methods (char type, const char *theclass, const char *category,
 
       unsigned int objfile_csym = 0;
 
-      objc_csym = (unsigned int *) objfile_data (objfile, objc_objfile_data);
+      objc_csym = objc_objfile_data.get (objfile);
       if (objc_csym != NULL && *objc_csym == 0)
 	/* There are no ObjC symbols in this objfile.  Skip it entirely.  */
 	continue;
 
-      for (minimal_symbol *msymbol : objfile_msymbols (objfile))
+      for (minimal_symbol *msymbol : objfile->msymbols ())
 	{
 	  QUIT;
 
@@ -1055,11 +1056,7 @@ find_methods (char type, const char *theclass, const char *category,
 	}
 
       if (objc_csym == NULL)
-	{
-	  objc_csym = XOBNEW (&objfile->objfile_obstack, unsigned int);
-	  *objc_csym = objfile_csym;
-	  set_objfile_data (objfile, objc_objfile_data, objc_csym);
-	}
+	objc_csym = objc_objfile_data.emplace (objfile, objfile_csym);
       else
 	/* Count of ObjC methods in this objfile should be constant.  */
 	gdb_assert (*objc_csym == objfile_csym);
@@ -1297,18 +1294,17 @@ find_objc_msgcall_submethod (int (*f) (CORE_ADDR, CORE_ADDR *),
 			     CORE_ADDR pc, 
 			     CORE_ADDR *new_pc)
 {
-  TRY
+  try
     {
       if (f (pc, new_pc) == 0)
 	return 1;
     }
-  CATCH (ex, RETURN_MASK_ALL)
+  catch (const gdb_exception &ex)
     {
       exception_fprintf (gdb_stderr, ex,
 			 "Unable to determine target of "
 			 "Objective-C method call (ignoring):\n");
     }
-  END_CATCH
 
   return 0;
 }
@@ -1575,10 +1571,4 @@ resolve_msgsend_super_stret (CORE_ADDR pc, CORE_ADDR *new_pc)
   if (res == 0)
     return 1;
   return 0;
-}
-
-void
-_initialize_objc_lang (void)
-{
-  objc_objfile_data = register_objfile_data ();
 }

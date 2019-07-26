@@ -19,8 +19,8 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.  */
 
-#ifndef TUI_IO_H
-#define TUI_IO_H
+#ifndef TUI_TUI_IO_H
+#define TUI_TUI_IO_H
 
 #include "gdb_curses.h"
 
@@ -48,7 +48,10 @@ extern void tui_redisplay_readline (void);
 /* Expand TABs into spaces.  */
 extern char *tui_expand_tabs (const char *, int);
 
+/* Enter/leave reverse video mode.  */
+extern void tui_set_reverse_mode (WINDOW *w, bool reverse);
+
 extern struct ui_out *tui_out;
 extern cli_ui_out *tui_old_uiout;
 
-#endif
+#endif /* TUI_TUI_IO_H */

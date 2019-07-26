@@ -18,11 +18,18 @@
 
 #include "defs.h"
 #include "source-cache.h"
-#include "common/scoped_fd.h"
+#include "gdbsupport/scoped_fd.h"
 #include "source.h"
 #include "cli/cli-style.h"
+#include "symtab.h"
 
 #ifdef HAVE_SOURCE_HIGHLIGHT
+/* If Gnulib redirects 'open' and 'close' to its replacements
+   'rpl_open' and 'rpl_close' via cpp macros, including <fstream>
+   below with those macros in effect will cause unresolved externals
+   when GDB is linked.  Happens, e.g., in the MinGW build.  */
+#undef open
+#undef close
 #include <fstream>
 #include <sstream>
 #include <srchilite/sourcehighlight.h>
@@ -43,12 +50,9 @@ bool
 source_cache::get_plain_source_lines (struct symtab *s, int first_line,
 				      int last_line, std::string *lines)
 {
-  scoped_fd desc (open_source_file (s));
+  scoped_fd desc (open_source_file_with_line_charpos (s));
   if (desc.get () < 0)
     return false;
-
-  if (s->line_charpos == 0)
-    find_source_lines (s, desc.get ());
 
   if (first_line < 1 || first_line > s->nlines || last_line < 1)
     return false;
@@ -78,9 +82,9 @@ source_cache::get_plain_source_lines (struct symtab *s, int first_line,
 
 /* See source-cache.h.  */
 
-bool
+std::string
 source_cache::extract_lines (const struct source_text &text, int first_line,
-			     int last_line, std::string *lines)
+			     int last_line)
 {
   int lineno = 1;
   std::string::size_type pos = 0;
@@ -96,16 +100,17 @@ source_cache::extract_lines (const struct source_text &text, int first_line,
       pos = new_pos;
       if (lineno == last_line || pos == std::string::npos)
 	{
+	  if (first_pos == std::string::npos)
+	    return {};
 	  if (pos == std::string::npos)
 	    pos = text.contents.size ();
-	  *lines = text.contents.substr (first_pos, pos - first_pos);
-	  return true;
+	  return text.contents.substr (first_pos, pos - first_pos);
 	}
       ++lineno;
       ++pos;
     }
 
-  return false;
+  return {};
 }
 
 #ifdef HAVE_SOURCE_HIGHLIGHT
@@ -174,14 +179,17 @@ source_cache::get_source_lines (struct symtab *s, int first_line,
     return false;
 
 #ifdef HAVE_SOURCE_HIGHLIGHT
-  if (can_emit_style_escape (gdb_stdout))
+  if (source_styling && gdb_stdout->can_emit_style_escape ())
     {
       const char *fullname = symtab_to_fullname (s);
 
       for (const auto &item : m_source_map)
 	{
 	  if (item.fullname == fullname)
-	    return extract_lines (item, first_line, last_line, lines);
+	    {
+	      *lines = extract_lines (item, first_line, last_line);
+	      return true;
+	    }
 	}
 
       const char *lang_name = get_language_name (SYMTAB_LANGUAGE (s));
@@ -190,11 +198,34 @@ source_cache::get_source_lines (struct symtab *s, int first_line,
 	  std::ifstream input (fullname);
 	  if (input.is_open ())
 	    {
-	      srchilite::SourceHighlight highlighter ("esc.outlang");
-	      highlighter.setStyleFile("esc.style");
+	      /* The global source highlight object, or null if one
+		 was never constructed.  This is stored here rather
+		 than in the class so that we don't need to include
+		 anything or do conditional compilation in
+		 source-cache.h.  */
+	      static srchilite::SourceHighlight *highlighter;
+
+	      if (s->line_charpos == 0)
+		{
+		  scoped_fd desc (open_source_file_with_line_charpos (s));
+		  if (desc.get () < 0)
+		    return false;
+
+		  /* FULLNAME points to a value owned by the symtab
+		     (symtab::fullname).  Calling open_source_file reallocates
+		     that value, so we must refresh FULLNAME to avoid a
+		     use-after-free.  */
+		  fullname = symtab_to_fullname (s);
+		}
+
+	      if (highlighter == nullptr)
+		{
+		  highlighter = new srchilite::SourceHighlight ("esc.outlang");
+		  highlighter->setStyleFile ("esc.style");
+		}
 
 	      std::ostringstream output;
-	      highlighter.highlight (input, output, lang_name, fullname);
+	      highlighter->highlight (input, output, lang_name, fullname);
 
 	      source_text result = { fullname, output.str () };
 	      m_source_map.push_back (std::move (result));
@@ -202,8 +233,9 @@ source_cache::get_source_lines (struct symtab *s, int first_line,
 	      if (m_source_map.size () > MAX_ENTRIES)
 		m_source_map.erase (m_source_map.begin ());
 
-	      return extract_lines (m_source_map.back (), first_line,
-				    last_line, lines);
+	      *lines = extract_lines (m_source_map.back (), first_line,
+				      last_line);
+	      return true;
 	    }
 	}
     }

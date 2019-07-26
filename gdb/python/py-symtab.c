@@ -24,7 +24,6 @@
 #include "python-internal.h"
 #include "objfiles.h"
 #include "block.h"
-#include "py-ref.h"
 
 typedef struct stpy_symtab_object {
   PyObject_HEAD
@@ -177,7 +176,7 @@ static PyObject *
 stpy_global_block (PyObject *self, PyObject *args)
 {
   struct symtab *symtab = NULL;
-  struct block *block = NULL;
+  const struct block *block = NULL;
   const struct blockvector *blockvector;
 
   STPY_REQUIRE_VALID (self, symtab);
@@ -193,7 +192,7 @@ static PyObject *
 stpy_static_block (PyObject *self, PyObject *args)
 {
   struct symtab *symtab = NULL;
-  struct block *block = NULL;
+  const struct block *block = NULL;
   const struct blockvector *blockvector;
 
   STPY_REQUIRE_VALID (self, symtab);

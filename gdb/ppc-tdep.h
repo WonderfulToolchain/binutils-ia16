@@ -20,6 +20,8 @@
 #ifndef PPC_TDEP_H
 #define PPC_TDEP_H
 
+#include "gdbarch.h"
+
 struct gdbarch;
 struct frame_info;
 struct value;
@@ -243,6 +245,10 @@ struct gdbarch_tdep
     /* Altivec registers.  */
     int ppc_vr0_regnum;		/* First AltiVec register.  */
     int ppc_vrsave_regnum;	/* Last AltiVec register.  */
+
+    /* Altivec pseudo-register vX aliases for the raw vrX
+       registers.  */
+    int ppc_v0_alias_regnum;
 
     /* SPE registers.  */
     int ppc_ev0_upper_regnum;   /* First GPR upper half register.  */

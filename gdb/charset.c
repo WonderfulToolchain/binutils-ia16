@@ -21,12 +21,12 @@
 #include "charset.h"
 #include "gdbcmd.h"
 #include "gdb_obstack.h"
-#include "gdb_wait.h"
+#include "gdbsupport/gdb_wait.h"
 #include "charset-list.h"
-#include "vec.h"
-#include "environ.h"
+#include "gdbsupport/vec.h"
+#include "gdbsupport/environ.h"
 #include "arch-utils.h"
-#include "gdb_vecs.h"
+#include "gdbsupport/gdb_vecs.h"
 #include <ctype.h>
 
 #ifdef USE_WIN32API

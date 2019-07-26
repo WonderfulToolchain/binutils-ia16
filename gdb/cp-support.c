@@ -34,9 +34,9 @@
 #include "cp-abi.h"
 #include "namespace.h"
 #include <signal.h>
-#include "gdb_setjmp.h"
+#include "gdbsupport/gdb_setjmp.h"
 #include "safe-ctype.h"
-#include "selftest.h"
+#include "gdbsupport/selftest.h"
 
 #define d_left(dc) (dc)->u.s_binary.left
 #define d_right(dc) (dc)->u.s_binary.right
@@ -151,15 +151,14 @@ inspect_type (struct demangle_parse_info *info,
 
   sym = NULL;
 
-  TRY
+  try
     {
       sym = lookup_symbol (name, 0, VAR_DOMAIN, 0).symbol;
     }
-  CATCH (except, RETURN_MASK_ALL)
+  catch (const gdb_exception &except)
     {
       return 0;
     }
-  END_CATCH
 
   if (sym != NULL)
     {
@@ -191,10 +190,20 @@ inspect_type (struct demangle_parse_info *info,
 	  /* Get the real type of the typedef.  */
 	  type = check_typedef (otype);
 
-	  /* If the symbol is a namespace and its type name is no different
+	  /* If the symbol name is the same as the original type name,
+	     don't substitute.  That would cause infinite recursion in
+	     symbol lookups, as the typedef symbol is often the first
+	     found symbol in the symbol table.
+
+	     However, this can happen in a number of situations, such as:
+
+	     If the symbol is a namespace and its type name is no different
 	     than the name we looked up, this symbol is not a namespace
-	     alias and does not need to be substituted.  */
-	  if (TYPE_CODE (otype) == TYPE_CODE_NAMESPACE
+	     alias and does not need to be substituted.
+
+	     If the symbol is typedef and its type name is the same
+	     as the symbol's name, e.g., "typedef struct foo foo;".  */
+	  if (TYPE_NAME (type) != nullptr
 	      && strcmp (TYPE_NAME (type), name) == 0)
 	    return 0;
 
@@ -223,17 +232,16 @@ inspect_type (struct demangle_parse_info *info,
 	    }
 
 	  string_file buf;
-	  TRY
+	  try
 	    {
 	      type_print (type, "", &buf, -1);
 	    }
 	  /* If type_print threw an exception, there is little point
 	     in continuing, so just bow out gracefully.  */
-	  CATCH (except, RETURN_MASK_ERROR)
+	  catch (const gdb_exception_error &except)
 	    {
 	      return 0;
 	    }
-	  END_CATCH
 
 	  len = buf.size ();
 	  name = (char *) obstack_copy0 (&info->obstack, buf.c_str (), len);
@@ -424,15 +432,14 @@ replace_typedefs (struct demangle_parse_info *info,
 	      struct symbol *sym = NULL;
 
 	      sym = NULL;
-	      TRY
+	      try
 		{
 		  sym = lookup_symbol (local_name.get (), 0,
 				       VAR_DOMAIN, 0).symbol;
 		}
-	      CATCH (except, RETURN_MASK_ALL)
+	      catch (const gdb_exception &except)
 		{
 		}
-	      END_CATCH
 
 	      if (sym != NULL)
 		{
@@ -901,7 +908,7 @@ cp_remove_params_if_any (const char *demangled_name, bool completion_mode)
      we're completing / matching everything, avoid returning NULL
      which would make callers interpret the result as an error.  */
   if (demangled_name[0] == '\0' && completion_mode)
-    return gdb::unique_xmalloc_ptr<char> (xstrdup (""));
+    return make_unique_xstrdup ("");
 
   gdb::unique_xmalloc_ptr<char> without_params
     = cp_remove_params_1 (demangled_name, false);
@@ -1378,7 +1385,7 @@ add_symbol_overload_list_qualified (const char *func_name,
   /* Look through the partial symtabs for all symbols which begin by
      matching FUNC_NAME.  Make sure we read that symbol table in.  */
 
-  for (objfile *objf : all_objfiles (current_program_space))
+  for (objfile *objf : current_program_space->objfiles ())
     {
       if (objf->sf)
 	objf->sf->qf->expand_symtabs_for_function (objf, func_name);
@@ -1395,9 +1402,9 @@ add_symbol_overload_list_qualified (const char *func_name,
   /* Go through the symtabs and check the externs and statics for
      symbols which match.  */
 
-  for (objfile *objfile : all_objfiles (current_program_space))
+  for (objfile *objfile : current_program_space->objfiles ())
     {
-      for (compunit_symtab *cust : objfile_compunits (objfile))
+      for (compunit_symtab *cust : objfile->compunits ())
 	{
 	  QUIT;
 	  b = BLOCKVECTOR_BLOCK (COMPUNIT_BLOCKVECTOR (cust), GLOBAL_BLOCK);
@@ -1405,9 +1412,9 @@ add_symbol_overload_list_qualified (const char *func_name,
 	}
     }
 
-  for (objfile *objfile : all_objfiles (current_program_space))
+  for (objfile *objfile : current_program_space->objfiles ())
     {
-      for (compunit_symtab *cust : objfile_compunits (objfile))
+      for (compunit_symtab *cust : objfile->compunits ())
 	{
 	  QUIT;
 	  b = BLOCKVECTOR_BLOCK (COMPUNIT_BLOCKVECTOR (cust), STATIC_BLOCK);
@@ -1422,7 +1429,7 @@ add_symbol_overload_list_qualified (const char *func_name,
 /* Lookup the rtti type for a class name.  */
 
 struct type *
-cp_lookup_rtti_type (const char *name, struct block *block)
+cp_lookup_rtti_type (const char *name, const struct block *block)
 {
   struct symbol * rtti_sym;
   struct type * rtti_type;

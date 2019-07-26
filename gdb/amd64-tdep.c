@@ -39,14 +39,14 @@
 #include "disasm.h"
 #include "amd64-tdep.h"
 #include "i387-tdep.h"
-#include "x86-xstate.h"
+#include "gdbsupport/x86-xstate.h"
 #include <algorithm>
 #include "target-descriptions.h"
 #include "arch/amd64.h"
 #include "producer.h"
 #include "ax.h"
 #include "ax-gdb.h"
-#include "common/byte-vector.h"
+#include "gdbsupport/byte-vector.h"
 #include "osabi.h"
 #include "x86-tdep.h"
 
@@ -541,17 +541,42 @@ amd64_merge_classes (enum amd64_reg_class class1, enum amd64_reg_class class2)
 
 static void amd64_classify (struct type *type, enum amd64_reg_class theclass[2]);
 
-/* Return non-zero if TYPE is a non-POD structure or union type.  */
+/* Return true if TYPE is a structure or union with unaligned fields.  */
 
-static int
-amd64_non_pod_p (struct type *type)
+static bool
+amd64_has_unaligned_fields (struct type *type)
 {
-  /* ??? A class with a base class certainly isn't POD, but does this
-     catch all non-POD structure types?  */
-  if (TYPE_CODE (type) == TYPE_CODE_STRUCT && TYPE_N_BASECLASSES (type) > 0)
-    return 1;
+  if (TYPE_CODE (type) == TYPE_CODE_STRUCT
+      || TYPE_CODE (type) == TYPE_CODE_UNION)
+    {
+      for (int i = 0; i < TYPE_NFIELDS (type); i++)
+	{
+	  struct type *subtype = check_typedef (TYPE_FIELD_TYPE (type, i));
+	  int bitpos = TYPE_FIELD_BITPOS (type, i);
+	  int align = type_align(subtype);
 
-  return 0;
+	  /* Ignore static fields, empty fields (for example nested
+	     empty structures), and bitfields (these are handled by
+	     the caller).  */
+	  if (field_is_static (&TYPE_FIELD (type, i))
+	      || (TYPE_FIELD_BITSIZE (type, i) == 0
+		  && TYPE_LENGTH (subtype) == 0)
+	      || TYPE_FIELD_PACKED (type, i))
+	    continue;
+
+	  if (bitpos % 8 != 0)
+	    return true;
+
+	  int bytepos = bitpos / 8;
+	  if (bytepos % align != 0)
+	    return true;
+
+	  if (amd64_has_unaligned_fields (subtype))
+	    return true;
+	}
+    }
+
+  return false;
 }
 
 /* Classify TYPE according to the rules for aggregate (structures and
@@ -560,10 +585,9 @@ amd64_non_pod_p (struct type *type)
 static void
 amd64_classify_aggregate (struct type *type, enum amd64_reg_class theclass[2])
 {
-  /* 1. If the size of an object is larger than two eightbytes, or in
-        C++, is a non-POD structure or union type, or contains
+  /* 1. If the size of an object is larger than two eightbytes, or it has
         unaligned fields, it has class memory.  */
-  if (TYPE_LENGTH (type) > 16 || amd64_non_pod_p (type))
+  if (TYPE_LENGTH (type) > 16 || amd64_has_unaligned_fields (type))
     {
       theclass[0] = theclass[1] = AMD64_MEMORY;
       return;
@@ -2581,16 +2605,15 @@ amd64_frame_cache (struct frame_info *this_frame, void **this_cache)
   cache = amd64_alloc_frame_cache ();
   *this_cache = cache;
 
-  TRY
+  try
     {
       amd64_frame_cache_1 (this_frame, cache);
     }
-  CATCH (ex, RETURN_MASK_ERROR)
+  catch (const gdb_exception_error &ex)
     {
       if (ex.error != NOT_AVAILABLE_ERROR)
-	throw_exception (ex);
+	throw;
     }
-  END_CATCH
 
   return cache;
 }
@@ -2699,7 +2722,7 @@ amd64_sigtramp_frame_cache (struct frame_info *this_frame, void **this_cache)
 
   cache = amd64_alloc_frame_cache ();
 
-  TRY
+  try
     {
       get_frame_register (this_frame, AMD64_RSP_REGNUM, buf);
       cache->base = extract_unsigned_integer (buf, 8, byte_order) - 8;
@@ -2713,12 +2736,11 @@ amd64_sigtramp_frame_cache (struct frame_info *this_frame, void **this_cache)
 
       cache->base_p = 1;
     }
-  CATCH (ex, RETURN_MASK_ERROR)
+  catch (const gdb_exception_error &ex)
     {
       if (ex.error != NOT_AVAILABLE_ERROR)
-	throw_exception (ex);
+	throw;
     }
-  END_CATCH
 
   *this_cache = cache;
   return cache;
@@ -2876,7 +2898,7 @@ amd64_epilogue_frame_cache (struct frame_info *this_frame, void **this_cache)
   cache = amd64_alloc_frame_cache ();
   *this_cache = cache;
 
-  TRY
+  try
     {
       /* Cache base will be %esp plus cache->sp_offset (-8).  */
       get_frame_register (this_frame, AMD64_RSP_REGNUM, buf);
@@ -2894,12 +2916,11 @@ amd64_epilogue_frame_cache (struct frame_info *this_frame, void **this_cache)
 
       cache->base_p = 1;
     }
-  CATCH (ex, RETURN_MASK_ERROR)
+  catch (const gdb_exception_error &ex)
     {
       if (ex.error != NOT_AVAILABLE_ERROR)
-	throw_exception (ex);
+	throw;
     }
-  END_CATCH
 
   return cache;
 }
@@ -3107,15 +3128,7 @@ amd64_init_abi (struct gdbarch_info info, struct gdbarch *gdbarch,
 
   if (tdesc_find_feature (tdesc, "org.gnu.gdb.i386.segments") != NULL)
     {
-      const struct tdesc_feature *feature =
-	  tdesc_find_feature (tdesc, "org.gnu.gdb.i386.segments");
-      struct tdesc_arch_data *tdesc_data_segments =
-	  (struct tdesc_arch_data *) info.tdep_info;
-
-      tdesc_numbered_register (feature, tdesc_data_segments,
-		       AMD64_FSBASE_REGNUM, "fs_base");
-      tdesc_numbered_register (feature, tdesc_data_segments,
-		       AMD64_GSBASE_REGNUM, "gs_base");
+      tdep->fsbase_regnum = AMD64_FSBASE_REGNUM;
     }
 
   if (tdesc_find_feature (tdesc, "org.gnu.gdb.i386.pkeys") != NULL)
@@ -3305,29 +3318,6 @@ _initialize_amd64_tdep (void)
  			  amd64_none_init_abi);
   gdbarch_register_osabi (bfd_arch_i386, bfd_mach_x64_32, GDB_OSABI_NONE,
  			  amd64_x32_none_init_abi);
-
-#if GDB_SELF_TEST
-  struct
-  {
-    const char *xml;
-    uint64_t mask;
-  } xml_masks[] = {
-    { "i386/amd64.xml", X86_XSTATE_SSE_MASK },
-    { "i386/amd64-avx.xml", X86_XSTATE_AVX_MASK },
-    { "i386/amd64-mpx.xml", X86_XSTATE_MPX_MASK },
-    { "i386/amd64-avx-mpx.xml", X86_XSTATE_AVX_MPX_MASK },
-    { "i386/amd64-avx-avx512.xml", X86_XSTATE_AVX_AVX512_MASK },
-    { "i386/amd64-avx-mpx-avx512-pku.xml",
-      X86_XSTATE_AVX_MPX_AVX512_PKU_MASK },
-  };
-
-  for (auto &a : xml_masks)
-    {
-      auto tdesc = amd64_target_description (a.mask, true);
-
-      selftests::record_xml_tdesc (a.xml, tdesc);
-    }
-#endif /* GDB_SELF_TEST */
 }
 
 

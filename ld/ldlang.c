@@ -2251,19 +2251,20 @@ lang_map (void)
 	  || file->flags.just_syms)
 	continue;
 
-      for (s = file->the_bfd->sections; s != NULL; s = s->next)
-	if ((s->output_section == NULL
-	     || s->output_section->owner != link_info.output_bfd)
-	    && (s->flags & (SEC_LINKER_CREATED | SEC_KEEP)) == 0)
-	  {
-	    if (!dis_header_printed)
-	      {
-		fprintf (config.map_file, _("\nDiscarded input sections\n\n"));
-		dis_header_printed = TRUE;
-	      }
+      if (config.print_map_discarded)
+	for (s = file->the_bfd->sections; s != NULL; s = s->next)
+	  if ((s->output_section == NULL
+	       || s->output_section->owner != link_info.output_bfd)
+	      && (s->flags & (SEC_LINKER_CREATED | SEC_KEEP)) == 0)
+	    {
+	      if (! dis_header_printed)
+		{
+		  fprintf (config.map_file, _("\nDiscarded input sections\n\n"));
+		  dis_header_printed = TRUE;
+		}
 
-	    print_input_section (s, TRUE);
-	  }
+	      print_input_section (s, TRUE);
+	    }
     }
 
   minfo (_("\nMemory Configuration\n\n"));
@@ -2315,6 +2316,7 @@ lang_map (void)
       obstack_begin (&map_obstack, 1000);
       bfd_link_hash_traverse (link_info.hash, sort_def_symbol, 0);
     }
+  expld.phase = lang_fixed_phase_enum;
   lang_statement_iteration++;
   print_statements ();
 
@@ -2577,6 +2579,7 @@ lang_add_section (lang_statement_list_type *ptr,
     {
     case normal_section:
     case overlay_section:
+    case first_overlay_section:
       break;
     case noalloc_section:
       flags &= ~SEC_ALLOC;
@@ -3743,7 +3746,9 @@ update_wild_statements (lang_statement_union_type *s)
 	    case lang_wild_statement_enum:
 	      for (sec = s->wild_statement.section_list; sec != NULL;
 		   sec = sec->next)
-		{
+		/* Don't sort .init/.fini sections.  */
+		if (strcmp (sec->spec.name, ".init") != 0
+		    && strcmp (sec->spec.name, ".fini") != 0)
 		  switch (sec->spec.sorted)
 		    {
 		    case none:
@@ -3760,7 +3765,6 @@ update_wild_statements (lang_statement_union_type *s)
 		    default:
 		      break;
 		    }
-		}
 	      break;
 
 	    case lang_constructors_statement_enum:
@@ -3768,11 +3772,8 @@ update_wild_statements (lang_statement_union_type *s)
 	      break;
 
 	    case lang_output_section_statement_enum:
-	      /* Don't sort .init/.fini sections.  */
-	      if (strcmp (s->output_section_statement.name, ".init") != 0
-		  && strcmp (s->output_section_statement.name, ".fini") != 0)
-		update_wild_statements
-		  (s->output_section_statement.children.head);
+	      update_wild_statements
+		(s->output_section_statement.children.head);
 	      break;
 
 	    case lang_group_statement_enum:
@@ -3846,6 +3847,7 @@ map_input_to_output_sections
 	    {
 	    case normal_section:
 	    case overlay_section:
+	    case first_overlay_section:
 	      break;
 	    case noalloc_section:
 	      flags = SEC_HAS_CONTENTS;
@@ -4244,9 +4246,7 @@ print_assignment (lang_assignment_statement_type *assignment,
       const char *dst = assignment->exp->assign.dst;
 
       is_dot = (dst[0] == '.' && dst[1] == 0);
-      if (!is_dot)
-	expld.assign_name = dst;
-      tree = assignment->exp->assign.src;
+      tree = assignment->exp;
     }
 
   osec = output_section->bfd_section;
@@ -4281,7 +4281,9 @@ print_assignment (lang_assignment_statement_type *assignment,
 
 	  h = bfd_link_hash_lookup (link_info.hash, assignment->exp->assign.dst,
 				    FALSE, FALSE, TRUE);
-	  if (h)
+	  if (h != NULL
+	      && (h->type == bfd_link_hash_defined
+		  || h->type == bfd_link_hash_defweak))
 	    {
 	      value = h->u.def.value;
 	      value += h->u.def.section->output_section->vma;
@@ -5493,13 +5495,14 @@ lang_size_sections_1
 	       important, if an orphan section is placed after an
 	       otherwise empty output section that has an explicit lma
 	       set, we want that lma reflected in the orphans lma.  */
-	    if (!IGNORE_SECTION (os->bfd_section)
-		&& (os->bfd_section->size != 0
-		    || (r->last_os == NULL
-			&& os->bfd_section->vma != os->bfd_section->lma)
-		    || (r->last_os != NULL
-			&& dot >= (r->last_os->output_section_statement
-				   .bfd_section->vma)))
+	    if (((!IGNORE_SECTION (os->bfd_section)
+		  && (os->bfd_section->size != 0
+		      || (r->last_os == NULL
+			  && os->bfd_section->vma != os->bfd_section->lma)
+		      || (r->last_os != NULL
+			  && dot >= (r->last_os->output_section_statement
+				     .bfd_section->vma))))
+		 || os->sectype == first_overlay_section)
 		&& os->lma_region == NULL
 		&& !bfd_link_relocatable (&link_info))
 	      r->last_os = s;
@@ -5618,8 +5621,9 @@ lang_size_sections_1
 	  break;
 
 	case lang_object_symbols_statement_enum:
-	  link_info.create_object_symbols_section =
-	    output_section_statement->bfd_section;
+	  link_info.create_object_symbols_section
+	    = output_section_statement->bfd_section;
+	  output_section_statement->bfd_section->flags |= SEC_KEEP;
 	  break;
 
 	case lang_output_statement_enum:
@@ -8291,7 +8295,7 @@ lang_leave_overlay (etree_type *lma_expr,
       if (l->next == 0)
 	{
 	  l->os->load_base = lma_expr;
-	  l->os->sectype = normal_section;
+	  l->os->sectype = first_overlay_section;
 	}
       if (phdrs != NULL && l->os->phdrs == NULL)
 	l->os->phdrs = phdrs;

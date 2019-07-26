@@ -635,17 +635,17 @@ const struct mips_arch_choice mips_arch_choices[] =
     mips_cp0_names_numeric, NULL, 0, mips_cp1_names_mips3264,
     mips_hwr_names_numeric },
 
-  { "g464",   1, bfd_mach_mips_gs464, CPU_GS464,
+  { "gs464",   1, bfd_mach_mips_gs464, CPU_GS464,
     ISA_MIPS64R2, ASE_LOONGSON_MMI | ASE_LOONGSON_CAM | ASE_LOONGSON_EXT,
     mips_cp0_names_numeric, NULL, 0, mips_cp1_names_mips3264,
     mips_hwr_names_numeric },
 
-  { "g464e",   1, bfd_mach_mips_gs464e, CPU_GS464E,
+  { "gs464e",   1, bfd_mach_mips_gs464e, CPU_GS464E,
     ISA_MIPS64R2, ASE_LOONGSON_MMI | ASE_LOONGSON_CAM | ASE_LOONGSON_EXT
     | ASE_LOONGSON_EXT2, mips_cp0_names_numeric, NULL, 0, mips_cp1_names_mips3264,
     mips_hwr_names_numeric },
 
-  { "g264e",   1, bfd_mach_mips_gs464e, CPU_GS264E,
+  { "gs264e",   1, bfd_mach_mips_gs464e, CPU_GS264E,
     ISA_MIPS64R2, ASE_LOONGSON_MMI | ASE_LOONGSON_CAM | ASE_LOONGSON_EXT
     | ASE_LOONGSON_EXT2 | ASE_MSA | ASE_MSA64, mips_cp0_names_numeric, NULL,
     0, mips_cp1_names_mips3264, mips_hwr_names_numeric },
@@ -829,7 +829,7 @@ mips_convert_abiflags_ases (unsigned long afl_ases)
 /* Calculate combination ASE flags from regular ASE flags.  */
 
 static unsigned long
-mips_calculate_combination_ases (unsigned long opcode_ases)
+mips_calculate_combination_ases (int opcode_isa, unsigned long opcode_ases)
 {
   unsigned long combination_ases = 0;
 
@@ -837,6 +837,10 @@ mips_calculate_combination_ases (unsigned long opcode_ases)
     combination_ases |= ASE_XPA_VIRT;
   if ((opcode_ases & (ASE_MIPS16E2 | ASE_MT)) == (ASE_MIPS16E2 | ASE_MT))
     combination_ases |= ASE_MIPS16E2_MT;
+  if ((opcode_ases & ASE_EVA)
+      && ((opcode_isa & INSN_ISA_MASK) == ISA_MIPS64R6
+	  || (opcode_isa & INSN_ISA_MASK) == ISA_MIPS32R6))
+    combination_ases |= ASE_EVA_R6;
   return combination_ases;
 }
 
@@ -909,7 +913,7 @@ set_default_mips_dis_options (struct disassemble_info *info)
 	mips_ase |= ASE_MDMX;
     }
 #endif
-  mips_ase |= mips_calculate_combination_ases (mips_ase);
+  mips_ase |= mips_calculate_combination_ases (mips_isa, mips_ase);
 }
 
 /* Parse an ASE disassembler option and set the corresponding global
@@ -997,7 +1001,7 @@ parse_mips_dis_option (const char *option, unsigned int len)
 
   if (parse_mips_ase_option (option))
     {
-      mips_ase |= mips_calculate_combination_ases (mips_ase);
+      mips_ase |= mips_calculate_combination_ases (mips_isa, mips_ase);
       return;
     }
 

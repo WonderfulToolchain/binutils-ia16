@@ -45,19 +45,6 @@ AX_CXX_COMPILE_STDCXX(11, , mandatory)
 ZW_CREATE_DEPDIR
 ZW_PROG_COMPILER_DEPENDENCIES([CC])
 
-gnulib_extra_configure_args=
-# If large-file support is disabled, make sure gnulib does the same.
-if test "$enable_largefile" = no; then
-gnulib_extra_configure_args="$gnulib_extra_configure_args --disable-largefile"
-fi
-
-# Configure gnulib.  We need to build gnulib under some other
-# directory not "gnulib", to avoid the problem of both GDB and
-# GDBserver wanting to build it in the same directory, when building
-# in the source dir.
-ACX_CONFIGURE_DIR(["gnulib"], ["build-gnulib"],
-                  ["$gnulib_extra_configure_args"])
-
 dnl List of object files and targets accumulated by configure.
 
 CONFIG_OBS=
@@ -82,15 +69,6 @@ if test x"$USE_NLS" = xyes; then
    CONFIG_INSTALL="$CONFIG_INSTALL install-po"
    CONFIG_UNINSTALL="$CONFIG_UNINSTALL uninstall-po"
 fi
-
-GNULIB=build-gnulib/import
-
-# For Makefile dependencies.
-GNULIB_STDINT_H=
-if test x"$STDINT_H" != x; then
-  GNULIB_STDINT_H=$GNULIB/$STDINT_H
-fi
-AC_SUBST(GNULIB_STDINT_H)
 
 PACKAGE=gdb
 AC_DEFINE_UNQUOTED(PACKAGE, "$PACKAGE", [Name of this package. ])
@@ -200,7 +178,7 @@ fi
 . $srcdir/configure.host
 
 # Add in the common host objects.
-. $srcdir/common/common.host
+. $srcdir/gdbsupport/common.host
 gdb_host_obs="$gdb_host_obs $common_host_obs"
 
 # Accumulate some settings from configure.tgt over all enabled targets
@@ -734,7 +712,7 @@ dnl no -   Don't include python support.
 dnl yes -  Include python support, error if it's missing.
 dnl        If we find python in $PATH, use it to fetch configure options,
 dnl        otherwise assume the compiler can find it with no help from us.
-dnl        Python 2.7, 2.6, 2.5, and then 2.4 are tried in turn.
+dnl        Python 2.7 and 2.6 are tried in turn.
 dnl auto - Same as "yes", but if python is missing from the system,
 dnl        fall back to "no".
 dnl /path/to/python/exec-prefix -
@@ -743,7 +721,7 @@ dnl        If /path/to/python/exec-prefix/bin/python exists, use it to find
 dnl        the compilation parameters.  Otherwise use
 dnl        -I/path/to/python/exec-prefix/include,
 dnl        -L/path/to/python/exec-prefix/lib.
-dnl        Python 2.7, 2.6, 2.5, and then 2.4 are tried in turn.
+dnl        Python 2.7 and 2.6 are tried in turn.
 dnl        NOTE: This case is historical.  It is what was done for 7.0/7.1
 dnl        but is deprecated.
 dnl /path/to/python/executable -
@@ -911,23 +889,11 @@ else
       AC_TRY_LIBPYTHON(python2.6, have_libpython,
                        ${python_includes}, "-lpython2.6 ${python_libs}")
     fi
-    if test ${have_libpython} = no; then
-      AC_TRY_LIBPYTHON(python2.5, have_libpython,
-                       ${python_includes}, "-lpython2.5 ${python_libs}")
-    fi
-    if test ${have_libpython} = no; then
-      AC_TRY_LIBPYTHON(python2.4, have_libpython,
-                       ${python_includes}, "-lpython2.4 ${python_libs}")
-    fi
   fi
   if test "${have_libpython}" = python2.7 -o "${have_libpython}" = python27; then
     AC_DEFINE(HAVE_LIBPYTHON2_7, 1, [Define if Python 2.7 is being used.])
   elif test "${have_libpython}" = python2.6 -o "${have_libpython}" = python26; then
     AC_DEFINE(HAVE_LIBPYTHON2_6, 1, [Define if Python 2.6 is being used.])
-  elif test "${have_libpython}" = python2.5 -o "${have_libpython}" = python25; then
-    AC_DEFINE(HAVE_LIBPYTHON2_5, 1, [Define if Python 2.5 is being used.])
-  elif test "${have_libpython}" = python2.4 -o "${have_libpython}" = python24; then
-    AC_DEFINE(HAVE_LIBPYTHON2_4, 1, [Define if Python 2.4 is being used.])
   fi
 
   if test "${have_libpython}" = no; then
@@ -1232,19 +1198,38 @@ AM_CONDITIONAL(HAVE_GUILE, test "${have_libguile}" != no)
 
 SRCHIGH_LIBS=
 SRCHIGH_CFLAGS=
-AC_MSG_CHECKING([for the source-highlight library])
-if test "${pkg_config_prog_path}" = "missing"; then
-   AC_MSG_RESULT([no - pkg-config not found])
-else
-   if ${pkg_config_prog_path} --exists source-highlight; then
+
+AC_ARG_ENABLE(source-highlight,
+  AS_HELP_STRING([--enable-source-highlight],
+    [enable source-highlight for source listings]),
+  [case "${enableval}" in
+  yes)  enable_source_highlight=yes ;;
+  no)   enable_source_highlight=no  ;;
+  *)    AC_MSG_ERROR(bad value ${enableval} for source-highlight option) ;;
+esac],
+[enable_source_highlight=auto])
+
+if test "${enable_source_highlight}" != "no"; then
+  AC_MSG_CHECKING([for the source-highlight library])
+  if test "${pkg_config_prog_path}" = "missing"; then
+    AC_MSG_RESULT([no - pkg-config not found])
+    if test "${enable_source_highlight}" = "yes"; then
+      AC_MSG_ERROR([pkg-config was not found in your system])
+    fi
+  else
+    if ${pkg_config_prog_path} --exists source-highlight; then
       SRCHIGH_CFLAGS=`${pkg_config_prog_path} --cflags source-highlight`
       SRCHIGH_LIBS=`${pkg_config_prog_path} --libs source-highlight`
       AC_DEFINE([HAVE_SOURCE_HIGHLIGHT], 1,
                 [Define to 1 if the source-highlight library is available])
       AC_MSG_RESULT([yes])
-   else
+    else
       AC_MSG_RESULT([no])
-   fi
+      if test "${enable_source_highlight}" = "yes"; then
+        AC_MSG_ERROR([source-highlight was not found in your system])
+      fi
+    fi
+  fi
 fi
 AC_SUBST(SRCHIGH_LIBS)
 AC_SUBST(SRCHIGH_CFLAGS)
@@ -2271,8 +2256,8 @@ AC_DEFINE(GDB_DEFAULT_HOST_CHARSET, "UTF-8",
           [Define to be a string naming the default host character set.])
 
 GDB_AC_SELFTEST([
-  CONFIG_OBS="$CONFIG_OBS \$(SUBDIR_UNITTESTS_OBS) common/selftest.o selftest-arch.o"
-  CONFIG_SRCS="$CONFIG_SRCS \$(SUBDIR_UNITTESTS_SRCS) common/selftest.c selftest-arch.c"
+  CONFIG_OBS="$CONFIG_OBS \$(SUBDIR_UNITTESTS_OBS) gdbsupport/selftest.o selftest-arch.o"
+  CONFIG_SRCS="$CONFIG_SRCS \$(SUBDIR_UNITTESTS_SRCS) gdbsupport/selftest.c selftest-arch.c"
 ])
 
 GDB_AC_TRANSFORM([gdb], [GDB_TRANSFORM_NAME])

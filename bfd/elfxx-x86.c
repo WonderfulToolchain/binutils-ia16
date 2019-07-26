@@ -1381,7 +1381,8 @@ _bfd_x86_elf_size_dynamic_sections (bfd *output_bfd,
 		{
 		  info->callbacks->einfo
 		    (_("%P%X: read-only segment has dynamic IFUNC relocations;"
-		       " recompile with -fPIC\n"));
+		       " recompile with %s\n"),
+		     bfd_link_dll (info) ? "-fPIC" : "-fPIE");
 		  bfd_set_error (bfd_error_bad_value);
 		  return FALSE;
 		}
@@ -2401,6 +2402,7 @@ _bfd_x86_elf_parse_gnu_properties (bfd *abfd, unsigned int type,
 bfd_boolean
 _bfd_x86_elf_merge_gnu_properties (struct bfd_link_info *info,
 				   bfd *abfd ATTRIBUTE_UNUSED,
+				   bfd *bbfd ATTRIBUTE_UNUSED,
 				   elf_property *aprop,
 				   elf_property *bprop)
 {
@@ -2478,12 +2480,18 @@ _bfd_x86_elf_merge_gnu_properties (struct bfd_link_info *info,
 	 2. If APROP is NULL, remove x86 feature.
 	 3. Otherwise, do nothing.
        */
+      const struct elf_backend_data *bed
+	= get_elf_backend_data (info->output_bfd);
+      struct elf_x86_link_hash_table *htab
+	= elf_x86_hash_table (info, bed->target_id);
+      if (!htab)
+	abort ();
       if (aprop != NULL && bprop != NULL)
 	{
 	  features = 0;
-	  if (info->ibt)
+	  if (htab->params->ibt)
 	    features = GNU_PROPERTY_X86_FEATURE_1_IBT;
-	  if (info->shstk)
+	  if (htab->params->shstk)
 	    features |= GNU_PROPERTY_X86_FEATURE_1_SHSTK;
 	  number = aprop->u.number;
 	  /* Add GNU_PROPERTY_X86_FEATURE_1_IBT and
@@ -2496,25 +2504,25 @@ _bfd_x86_elf_merge_gnu_properties (struct bfd_link_info *info,
 	}
       else
 	{
+	  /* There should be no AND properties since some input doesn't
+	     have them.  Set IBT and SHSTK properties for -z ibt and -z
+	     shstk if needed.  */
 	  features = 0;
-	  if (info->ibt)
+	  if (htab->params->ibt)
 	    features = GNU_PROPERTY_X86_FEATURE_1_IBT;
-	  if (info->shstk)
+	  if (htab->params->shstk)
 	    features |= GNU_PROPERTY_X86_FEATURE_1_SHSTK;
 	  if (features)
 	    {
-	      /* Add GNU_PROPERTY_X86_FEATURE_1_IBT and
-		 GNU_PROPERTY_X86_FEATURE_1_SHSTK.  */
 	      if (aprop != NULL)
 		{
-		  number = aprop->u.number;
-		  aprop->u.number = number | features;
-		  updated = number != (unsigned int) aprop->u.number;
+		  updated = features != (unsigned int) aprop->u.number;
+		  aprop->u.number = features;
 		}
 	      else
 		{
-		  bprop->u.number |= features;
 		  updated = TRUE;
+		  bprop->u.number = features;
 		}
 	    }
 	  else if (aprop != NULL)
@@ -2555,12 +2563,6 @@ _bfd_x86_elf_link_setup_gnu_properties
   unsigned int class_align = ABI_64_P (info->output_bfd) ? 3 : 2;
   unsigned int got_align;
 
-  features = 0;
-  if (info->ibt)
-    features = GNU_PROPERTY_X86_FEATURE_1_IBT;
-  if (info->shstk)
-    features |= GNU_PROPERTY_X86_FEATURE_1_SHSTK;
-
   /* Find a normal input file with GNU property note.  */
   for (pbfd = info->input_bfds;
        pbfd != NULL;
@@ -2579,6 +2581,20 @@ _bfd_x86_elf_link_setup_gnu_properties
   htab = elf_x86_hash_table (info, bed->target_id);
   if (htab == NULL)
     return pbfd;
+
+  features = 0;
+  if (htab->params->ibt)
+    {
+      features = GNU_PROPERTY_X86_FEATURE_1_IBT;
+      htab->params->cet_report &= ~cet_report_ibt;
+    }
+  if (htab->params->shstk)
+    {
+      features |= GNU_PROPERTY_X86_FEATURE_1_SHSTK;
+      htab->params->cet_report &= ~cet_report_shstk;
+    }
+  if (!(htab->params->cet_report & (cet_report_ibt | cet_report_shstk)))
+    htab->params->cet_report = cet_report_none;
 
   if (ebfd != NULL)
     {
@@ -2619,6 +2635,54 @@ error_alignment:
 	}
     }
 
+  if (htab->params->cet_report)
+    {
+      /* Report missing IBT and SHSTK properties.  */
+      bfd *abfd;
+      const char *msg;
+      elf_property_list *p;
+      bfd_boolean missing_ibt, missing_shstk;
+      bfd_boolean check_ibt
+	= !!(htab->params->cet_report & cet_report_ibt);
+      bfd_boolean check_shstk
+	= !!(htab->params->cet_report & cet_report_shstk);
+
+      if ((htab->params->cet_report & cet_report_warning))
+	msg = _("%P: %pB: warning: missing %s\n");
+      else
+	msg = _("%X%P: %pB: error: missing %s\n");
+
+      for (abfd = info->input_bfds; abfd != NULL; abfd = abfd->link.next)
+	if (!(abfd->flags & (DYNAMIC | BFD_PLUGIN | BFD_LINKER_CREATED))
+	    && bfd_get_flavour (abfd) == bfd_target_elf_flavour)
+	  {
+	    for (p = elf_properties (abfd); p; p = p->next)
+	      if (p->property.pr_type == GNU_PROPERTY_X86_FEATURE_1_AND)
+		break;
+
+	    missing_ibt = check_ibt;
+	    missing_shstk = check_shstk;
+	    if (p)
+	      {
+		missing_ibt &= !(p->property.u.number
+				 & GNU_PROPERTY_X86_FEATURE_1_IBT);
+		missing_shstk &= !(p->property.u.number
+				   & GNU_PROPERTY_X86_FEATURE_1_SHSTK);
+	      }
+	    if (missing_ibt || missing_shstk)
+	      {
+		const char *missing;
+		if (missing_ibt && missing_shstk)
+		  missing = _("IBT and SHSTK properties");
+		else if (missing_ibt)
+		  missing = _("IBT property");
+		else
+		  missing = _("SHSTK property");
+		info->callbacks->einfo (msg, abfd, missing);
+	      }
+	  }
+    }
+
   pbfd = _bfd_elf_link_setup_gnu_properties (info);
 
   htab->r_info = init_table->r_info;
@@ -2629,7 +2693,7 @@ error_alignment:
 
   htab->plt0_pad_byte = init_table->plt0_pad_byte;
 
-  use_ibt_plt = info->ibtplt || info->ibt;
+  use_ibt_plt = htab->params->ibtplt || htab->params->ibt;
   if (!use_ibt_plt && pbfd != NULL)
     {
       /* Check if GNU_PROPERTY_X86_FEATURE_1_IBT is on.  */
@@ -2852,7 +2916,7 @@ error_alignment:
 						  plt_alignment))
 		    goto error_alignment;
 		}
-	      else if (info->bndplt && ABI_64_P (dynobj))
+	      else if (htab->params->bndplt && ABI_64_P (dynobj))
 		{
 		  /* Create the second PLT for Intel MPX support.  MPX
 		     PLT is supported only for non-NaCl target in 64-bit
@@ -2982,4 +3046,16 @@ _bfd_x86_elf_link_fixup_gnu_properties
 	  break;
 	}
     }
+}
+
+void
+_bfd_elf_linker_x86_set_options (struct bfd_link_info * info,
+				 struct elf_linker_x86_params *params)
+{
+  const struct elf_backend_data *bed
+    = get_elf_backend_data (info->output_bfd);
+  struct elf_x86_link_hash_table *htab
+    = elf_x86_hash_table (info, bed->target_id);
+  if (htab != NULL)
+    htab->params = params;
 }

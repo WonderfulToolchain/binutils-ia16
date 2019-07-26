@@ -36,6 +36,7 @@
 #include "infcall.h"
 #include "sim-regno.h"
 #include "gdb/sim-ppc.h"
+#include "reggroups.h"
 #include "dwarf2-frame.h"
 #include "target-descriptions.h"
 #include "user-regs.h"
@@ -94,6 +95,13 @@
 #define IS_DFP_PSEUDOREG(tdep, regnum) ((tdep)->ppc_dl0_regnum >= 0 \
     && (regnum) >= (tdep)->ppc_dl0_regnum \
     && (regnum) < (tdep)->ppc_dl0_regnum + 16)
+
+/* Determine if regnum is a "vX" alias for the raw "vrX" vector
+   registers.  */
+#define IS_V_ALIAS_PSEUDOREG(tdep, regnum) (\
+    (tdep)->ppc_v0_alias_regnum >= 0 \
+    && (regnum) >= (tdep)->ppc_v0_alias_regnum \
+    && (regnum) < (tdep)->ppc_v0_alias_regnum + ppc_num_vrs)
 
 /* Determine if regnum is a POWER7 VSX register.  */
 #define IS_VSX_PSEUDOREG(tdep, regnum) ((tdep)->ppc_vsr0_regnum >= 0 \
@@ -2370,6 +2378,18 @@ rs6000_register_name (struct gdbarch *gdbarch, int regno)
       return dfp128_regnames[regno - tdep->ppc_dl0_regnum];
     }
 
+  /* Check if this is a vX alias for a raw vrX vector register.  */
+  if (IS_V_ALIAS_PSEUDOREG (tdep, regno))
+    {
+      static const char *const vector_alias_regnames[] = {
+	"v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7",
+	"v8", "v9", "v10", "v11", "v12", "v13", "v14", "v15",
+	"v16", "v17", "v18", "v19", "v20", "v21", "v22", "v23",
+	"v24", "v25", "v26", "v27", "v28", "v29", "v30", "v31"
+      };
+      return vector_alias_regnames[regno - tdep->ppc_v0_alias_regnum];
+    }
+
   /* Check if this is a VSX pseudo-register.  */
   if (IS_VSX_PSEUDOREG (tdep, regno))
     {
@@ -2460,6 +2480,11 @@ rs6000_pseudo_register_type (struct gdbarch *gdbarch, int regnum)
 	   || IS_CDFP_PSEUDOREG (tdep, regnum))
     /* PPC decimal128 pseudo-registers.  */
     return builtin_type (gdbarch)->builtin_declong;
+  else if (IS_V_ALIAS_PSEUDOREG (tdep, regnum))
+    return gdbarch_register_type (gdbarch,
+				  tdep->ppc_vr0_regnum
+				  + (regnum
+				     - tdep->ppc_v0_alias_regnum));
   else if (IS_VSX_PSEUDOREG (tdep, regnum)
 	   || IS_CVSX_PSEUDOREG (tdep, regnum))
     /* POWER7 VSX pseudo-registers.  */
@@ -2473,6 +2498,24 @@ rs6000_pseudo_register_type (struct gdbarch *gdbarch, int regnum)
 		    _("rs6000_pseudo_register_type: "
 		      "called on unexpected register '%s' (%d)"),
 		    gdbarch_register_name (gdbarch, regnum), regnum);
+}
+
+/* Check if REGNUM is a member of REGGROUP.  We only need to handle
+   the vX aliases for the vector registers by always returning false
+   to avoid duplicated information in "info register vector/all",
+   since the raw vrX registers will already show in these cases.  For
+   other pseudo-registers we use the default membership function.  */
+
+static int
+rs6000_pseudo_register_reggroup_p (struct gdbarch *gdbarch, int regnum,
+				   struct reggroup *group)
+{
+  struct gdbarch_tdep *tdep = gdbarch_tdep (gdbarch);
+
+  if (IS_V_ALIAS_PSEUDOREG (tdep, regnum))
+    return 0;
+  else
+    return default_register_reggroup_p (gdbarch, regnum, group);
 }
 
 /* The register format for RS/6000 floating point registers is always
@@ -2717,6 +2760,35 @@ dfp_pseudo_register_write (struct gdbarch *gdbarch, struct regcache *regcache,
     }
 }
 
+/* Read method for the vX aliases for the raw vrX registers.  */
+
+static enum register_status
+v_alias_pseudo_register_read (struct gdbarch *gdbarch,
+			      readable_regcache *regcache, int reg_nr,
+			      gdb_byte *buffer)
+{
+  struct gdbarch_tdep *tdep = gdbarch_tdep (gdbarch);
+  gdb_assert (IS_V_ALIAS_PSEUDOREG (tdep, reg_nr));
+
+  return regcache->raw_read (tdep->ppc_vr0_regnum
+			     + (reg_nr - tdep->ppc_v0_alias_regnum),
+			     buffer);
+}
+
+/* Write method for the vX aliases for the raw vrX registers.  */
+
+static void
+v_alias_pseudo_register_write (struct gdbarch *gdbarch,
+			       struct regcache *regcache,
+			       int reg_nr, const gdb_byte *buffer)
+{
+  struct gdbarch_tdep *tdep = gdbarch_tdep (gdbarch);
+  gdb_assert (IS_V_ALIAS_PSEUDOREG (tdep, reg_nr));
+
+  regcache->raw_write (tdep->ppc_vr0_regnum
+		       + (reg_nr - tdep->ppc_v0_alias_regnum), buffer);
+}
+
 /* Read method for POWER7 VSX pseudo-registers.  */
 static enum register_status
 vsx_pseudo_register_read (struct gdbarch *gdbarch, readable_regcache *regcache,
@@ -2886,6 +2958,9 @@ rs6000_pseudo_register_read (struct gdbarch *gdbarch,
   else if (IS_DFP_PSEUDOREG (tdep, reg_nr)
 	   || IS_CDFP_PSEUDOREG (tdep, reg_nr))
     return dfp_pseudo_register_read (gdbarch, regcache, reg_nr, buffer);
+  else if (IS_V_ALIAS_PSEUDOREG (tdep, reg_nr))
+    return v_alias_pseudo_register_read (gdbarch, regcache, reg_nr,
+					 buffer);
   else if (IS_VSX_PSEUDOREG (tdep, reg_nr)
 	   || IS_CVSX_PSEUDOREG (tdep, reg_nr))
     return vsx_pseudo_register_read (gdbarch, regcache, reg_nr, buffer);
@@ -2914,6 +2989,8 @@ rs6000_pseudo_register_write (struct gdbarch *gdbarch,
   else if (IS_DFP_PSEUDOREG (tdep, reg_nr)
 	   || IS_CDFP_PSEUDOREG (tdep, reg_nr))
     dfp_pseudo_register_write (gdbarch, regcache, reg_nr, buffer);
+  else if (IS_V_ALIAS_PSEUDOREG (tdep, reg_nr))
+    v_alias_pseudo_register_write (gdbarch, regcache, reg_nr, buffer);
   else if (IS_VSX_PSEUDOREG (tdep, reg_nr)
 	   || IS_CVSX_PSEUDOREG (tdep, reg_nr))
     vsx_pseudo_register_write (gdbarch, regcache, reg_nr, buffer);
@@ -2952,6 +3029,20 @@ dfp_ax_pseudo_register_collect (struct gdbarch *gdbarch,
 
   ax_reg_mask (ax, fp0 + 2 * reg_index);
   ax_reg_mask (ax, fp0 + 2 * reg_index + 1);
+}
+
+/* Set the register mask in AX with the raw vector register that
+   corresponds to its REG_NR alias.  */
+
+static void
+v_alias_pseudo_register_collect (struct gdbarch *gdbarch,
+				 struct agent_expr *ax, int reg_nr)
+{
+  struct gdbarch_tdep *tdep = gdbarch_tdep (gdbarch);
+  gdb_assert (IS_V_ALIAS_PSEUDOREG (tdep, reg_nr));
+
+  ax_reg_mask (ax, tdep->ppc_vr0_regnum
+	       + (reg_nr - tdep->ppc_v0_alias_regnum));
 }
 
 /* Set the register mask in AX with the registers that form the VSX or
@@ -3033,6 +3124,10 @@ rs6000_ax_pseudo_register_collect (struct gdbarch *gdbarch,
 	   || IS_CDFP_PSEUDOREG (tdep, reg_nr))
     {
       dfp_ax_pseudo_register_collect (gdbarch, ax, reg_nr);
+    }
+  else if (IS_V_ALIAS_PSEUDOREG (tdep, reg_nr))
+    {
+      v_alias_pseudo_register_collect (gdbarch, ax, reg_nr);
     }
   else if (IS_VSX_PSEUDOREG (tdep, reg_nr)
 	   || IS_CVSX_PSEUDOREG (tdep, reg_nr))
@@ -3309,20 +3404,6 @@ find_variant_by_arch (enum bfd_architecture arch, unsigned long mach)
 }
 
 
-static CORE_ADDR
-rs6000_unwind_pc (struct gdbarch *gdbarch, struct frame_info *next_frame)
-{
-  return frame_unwind_register_unsigned (next_frame,
-					 gdbarch_pc_regnum (gdbarch));
-}
-
-static struct frame_id
-rs6000_dummy_id (struct gdbarch *gdbarch, struct frame_info *this_frame)
-{
-  return frame_id_build (get_frame_register_unsigned
-			  (this_frame, gdbarch_sp_regnum (gdbarch)),
-			 get_frame_pc (this_frame));
-}
 
 struct rs6000_frame_cache
 {
@@ -3356,7 +3437,7 @@ rs6000_frame_cache (struct frame_info *this_frame, void **this_cache)
   cache->pc = 0;
   cache->saved_regs = trad_frame_alloc_saved_regs (this_frame);
 
-  TRY
+  try
     {
       func = get_frame_func (this_frame);
       cache->pc = func;
@@ -3373,13 +3454,12 @@ rs6000_frame_cache (struct frame_info *this_frame, void **this_cache)
       cache->base = get_frame_register_unsigned
 	(this_frame, gdbarch_sp_regnum (gdbarch));
     }
-  CATCH (ex, RETURN_MASK_ERROR)
+  catch (const gdb_exception_error &ex)
     {
       if (ex.error != NOT_AVAILABLE_ERROR)
-	throw_exception (ex);
+	throw;
       return (struct rs6000_frame_cache *) (*this_cache);
     }
-  END_CATCH
 
   /* If the function appears to be frameless, check a couple of likely
      indicators that we have simply failed to find the frame setup.
@@ -3588,7 +3668,7 @@ rs6000_epilogue_frame_cache (struct frame_info *this_frame, void **this_cache)
   (*this_cache) = cache;
   cache->saved_regs = trad_frame_alloc_saved_regs (this_frame);
 
-  TRY
+  try
     {
       /* At this point the stack looks as if we just entered the
 	 function, and the return address is stored in LR.  */
@@ -3603,12 +3683,11 @@ rs6000_epilogue_frame_cache (struct frame_info *this_frame, void **this_cache)
       trad_frame_set_value (cache->saved_regs,
 			    gdbarch_pc_regnum (gdbarch), lr);
     }
-  CATCH (ex, RETURN_MASK_ERROR)
+  catch (const gdb_exception_error &ex)
     {
       if (ex.error != NOT_AVAILABLE_ERROR)
-	throw_exception (ex);
+	throw;
     }
-  END_CATCH
 
   return cache;
 }
@@ -6891,7 +6970,8 @@ rs6000_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   else
     tdep->lr_frame_offset = 4;
 
-  if (have_spe || have_dfp || have_vsx || have_htm_fpu || have_htm_vsx)
+  if (have_spe || have_dfp || have_altivec
+      || have_vsx || have_htm_fpu || have_htm_vsx)
     {
       set_gdbarch_pseudo_register_read (gdbarch, rs6000_pseudo_register_read);
       set_gdbarch_pseudo_register_write (gdbarch,
@@ -6910,6 +6990,8 @@ rs6000_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
     num_pseudoregs += 32;
   if (have_dfp)
     num_pseudoregs += 16;
+  if (have_altivec)
+    num_pseudoregs += 32;
   if (have_vsx)
     /* Include both VSX and Extended FP registers.  */
     num_pseudoregs += 96;
@@ -7005,23 +7087,21 @@ rs6000_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
     case GDB_OSABI_LINUX:
     case GDB_OSABI_NETBSD:
     case GDB_OSABI_UNKNOWN:
-      set_gdbarch_unwind_pc (gdbarch, rs6000_unwind_pc);
       frame_unwind_append_unwinder (gdbarch, &rs6000_epilogue_frame_unwind);
       frame_unwind_append_unwinder (gdbarch, &rs6000_frame_unwind);
-      set_gdbarch_dummy_id (gdbarch, rs6000_dummy_id);
       frame_base_append_sniffer (gdbarch, rs6000_frame_base_sniffer);
       break;
     default:
       set_gdbarch_believe_pcc_promotion (gdbarch, 1);
 
-      set_gdbarch_unwind_pc (gdbarch, rs6000_unwind_pc);
       frame_unwind_append_unwinder (gdbarch, &rs6000_epilogue_frame_unwind);
       frame_unwind_append_unwinder (gdbarch, &rs6000_frame_unwind);
-      set_gdbarch_dummy_id (gdbarch, rs6000_dummy_id);
       frame_base_append_sniffer (gdbarch, rs6000_frame_base_sniffer);
     }
 
   set_tdesc_pseudo_register_type (gdbarch, rs6000_pseudo_register_type);
+  set_tdesc_pseudo_register_reggroup_p (gdbarch,
+					rs6000_pseudo_register_reggroup_p);
   tdesc_use_registers (gdbarch, tdesc, tdesc_data);
 
   /* Override the normal target description method to make the SPE upper
@@ -7031,6 +7111,7 @@ rs6000_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
   /* Choose register numbers for all supported pseudo-registers.  */
   tdep->ppc_ev0_regnum = -1;
   tdep->ppc_dl0_regnum = -1;
+  tdep->ppc_v0_alias_regnum = -1;
   tdep->ppc_vsr0_regnum = -1;
   tdep->ppc_efpr0_regnum = -1;
   tdep->ppc_cdl0_regnum = -1;
@@ -7048,6 +7129,11 @@ rs6000_gdbarch_init (struct gdbarch_info info, struct gdbarch_list *arches)
     {
       tdep->ppc_dl0_regnum = cur_reg;
       cur_reg += 16;
+    }
+  if (have_altivec)
+    {
+      tdep->ppc_v0_alias_regnum = cur_reg;
+      cur_reg += 32;
     }
   if (have_vsx)
     {

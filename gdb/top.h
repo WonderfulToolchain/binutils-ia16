@@ -20,7 +20,7 @@
 #ifndef TOP_H
 #define TOP_H
 
-#include "buffer.h"
+#include "gdbsupport/buffer.h"
 #include "event-loop.h"
 #include "value.h"
 
@@ -217,10 +217,8 @@ extern void ui_register_input_event_handler (struct ui *ui);
 extern void ui_unregister_input_event_handler (struct ui *ui);
 
 /* From top.c.  */
-extern char *saved_command_line;
 extern int confirm;
 extern int inhibit_gdbinit;
-extern const char gdbinit[];
 
 /* Print the GDB version banner to STREAM.  If INTERACTIVE is false,
    then information referring to commands (e.g., "show configuration")
@@ -281,7 +279,7 @@ extern void gdb_init (char *);
 /* For use by event-top.c.  */
 /* Variables from top.c.  */
 extern int source_line_number;
-extern const char *source_file_name;
+extern std::string source_file_name;
 extern int history_expansion_p;
 extern int server_command;
 extern char *lim_at_start;

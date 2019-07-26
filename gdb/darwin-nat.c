@@ -63,10 +63,10 @@
 
 #include "darwin-nat.h"
 #include "filenames.h"
-#include "common/filestuff.h"
-#include "common/gdb_unlinker.h"
-#include "common/pathstuff.h"
-#include "common/scoped_fd.h"
+#include "gdbsupport/filestuff.h"
+#include "gdbsupport/gdb_unlinker.h"
+#include "gdbsupport/pathstuff.h"
+#include "gdbsupport/scoped_fd.h"
 #include "nat/fork-inferior.h"
 
 /* Quick overview.
@@ -687,7 +687,6 @@ darwin_decode_exception_message (mach_msg_header_t *hdr,
       /* Not a known inferior.  This could happen if the child fork, as
 	 the created process will inherit its exception port.
 	 FIXME: should the exception port be restored ?  */
-      kern_return_t kret;
       mig_reply_error_t reply;
 
       inferior_debug
@@ -1125,14 +1124,14 @@ darwin_decode_message (mach_msg_header_t *hdr,
 
 	  if (!priv->no_ptrace)
 	    {
-	      pid_t res;
+	      pid_t res_pid;
 	      int wstatus;
 
-	      res = wait4 (inf->pid, &wstatus, 0, NULL);
-	      if (res < 0 || res != inf->pid)
+	      res_pid = wait4 (inf->pid, &wstatus, 0, NULL);
+	      if (res_pid < 0 || res_pid != inf->pid)
 		{
 		  printf_unfiltered (_("wait4: res=%d: %s\n"),
-				     res, safe_strerror (errno));
+				     res_pid, safe_strerror (errno));
 		  status->kind = TARGET_WAITKIND_IGNORE;
 		  return minus_one_ptid;
 		}
@@ -1148,7 +1147,7 @@ darwin_decode_message (mach_msg_header_t *hdr,
 		}
 
 	      inferior_debug (4, _("darwin_wait: pid=%d exit, status=0x%x\n"),
-			      res, wstatus);
+			      res_pid, wstatus);
 
 	      /* Looks necessary on Leopard and harmless...  */
 	      wait4 (inf->pid, &wstatus, 0, NULL);
@@ -1559,7 +1558,6 @@ darwin_nat_target::kill ()
          signaled thus darwin_decode_message function knows that the kill
          signal was sent by gdb and will take the appropriate action
          (cancel signal and reply to the signal message).  */
-      darwin_inferior *priv = get_darwin_inferior (inf);
       for (darwin_thread_t *thread : priv->threads)
         thread->signaled = 1;
 
@@ -1611,7 +1609,7 @@ darwin_attach_pid (struct inferior *inf)
   darwin_inferior *priv = new darwin_inferior;
   inf->priv.reset (priv);
 
-  TRY
+  try
     {
       kret = task_for_pid (gdb_task, inf->pid, &priv->task);
       if (kret != KERN_SUCCESS)
@@ -1688,14 +1686,13 @@ darwin_attach_pid (struct inferior *inf)
 
       darwin_setup_exceptions (inf);
     }
-  CATCH (ex, RETURN_MASK_ALL)
+  catch (const gdb_exception &ex)
     {
       exit_inferior (inf);
       inferior_ptid = null_ptid;
 
-      throw_exception (ex);
+      throw;
     }
-  END_CATCH
 
   target_ops *darwin_ops = get_native_target ();
   if (!target_is_pushed (darwin_ops))
@@ -1949,11 +1946,11 @@ The error was: %s"),
   /* Maybe it was cached by some earlier gdb.  */
   if (stat (new_name.c_str (), &sb) != 0 || !S_ISREG (sb.st_mode))
     {
-      TRY
+      try
 	{
 	  copy_shell_to_cache (shell, new_name);
 	}
-      CATCH (ex, RETURN_MASK_ERROR)
+      catch (const gdb_exception_error &ex)
 	{
 	  warning (_("This version of macOS has System Integrity Protection.\n\
 Because `startup-with-shell' is enabled, gdb tried to work around SIP by\n\
@@ -1962,10 +1959,9 @@ caching a copy of your shell.  However, this failed:\n\
 If you correct the problem, gdb will automatically try again the next time\n\
 you \"run\".  To prevent these attempts, you can use:\n\
     set startup-with-shell off"),
-		   ex.message);
+		   ex.what ());
 	  return false;
 	}
-      END_CATCH
 
       printf_filtered (_("Note: this version of macOS has System Integrity Protection.\n\
 Because `startup-with-shell' is enabled, gdb has worked around this by\n\
@@ -2052,12 +2048,10 @@ darwin_nat_target::attach (const char *args, int from_tty)
 
       if (exec_file)
 	printf_unfiltered (_("Attaching to program: %s, %s\n"), exec_file,
-			   target_pid_to_str (ptid_t (pid)));
+			   target_pid_to_str (ptid_t (pid)).c_str ());
       else
 	printf_unfiltered (_("Attaching to %s\n"),
-			   target_pid_to_str (ptid_t (pid)));
-
-      gdb_flush (gdb_stdout);
+			   target_pid_to_str (ptid_t (pid)).c_str ());
     }
 
   if (pid == 0 || ::kill (pid, 0) < 0)
@@ -2128,18 +2122,14 @@ darwin_nat_target::detach (inferior *inf, int from_tty)
   mourn_inferior ();
 }
 
-const char *
+std::string
 darwin_nat_target::pid_to_str (ptid_t ptid)
 {
-  static char buf[80];
   long tid = ptid.tid ();
 
   if (tid != 0)
-    {
-      snprintf (buf, sizeof (buf), _("Thread 0x%lx of process %u"),
-		tid, ptid.pid ());
-      return buf;
-    }
+    return string_printf (_("Thread 0x%lx of process %u"),
+			  tid, ptid.pid ());
 
   return normal_pid_to_str (ptid);
 }

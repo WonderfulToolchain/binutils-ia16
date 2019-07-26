@@ -116,14 +116,15 @@ class minimal_symbol_reader
 
   /* Like record_full, but:
      - uses strlen to compute NAME_LEN,
-     - passes COPY_NAME = true.  */
+     - passes COPY_NAME = true.
 
-  struct minimal_symbol *record_with_info (const char *name,
-					   CORE_ADDR address,
-					   enum minimal_symbol_type ms_type,
-					   int section)
+     This variant does not return the new symbol.  */
+
+  void record_with_info (const char *name, CORE_ADDR address,
+			 enum minimal_symbol_type ms_type,
+			 int section)
   {
-    return record_full (name, strlen (name), true, address, ms_type, section);
+    record_full (name, strlen (name), true, address, ms_type, section);
   }
 
  private:
@@ -146,13 +147,6 @@ class minimal_symbol_reader
 
   int m_msym_count;
 };
-
-/* Create the terminating entry of OBJFILE's minimal symbol table.
-   If OBJFILE->msymbols is zero, allocate a single entry from
-   OBJFILE->objfile_obstack; otherwise, just initialize
-   OBJFILE->msymbols[OBJFILE->minimal_symbol_count].  */
-
-void terminate_minimal_symbol_table (struct objfile *objfile);
 
 
 
@@ -209,18 +203,6 @@ struct bound_minimal_symbol lookup_bound_minimal_symbol (const char *);
 
 struct bound_minimal_symbol lookup_minimal_symbol_text (const char *,
 							struct objfile *);
-
-/* Look through all the current minimal symbol tables and find the
-   first minimal symbol that matches NAME and is a solib trampoline.
-   If OBJF is non-NULL, limit the search to that objfile.  Returns a
-   pointer to the minimal symbol that matches, or NULL if no match is
-   found.
-
-   This function only searches the mangled (linkage) names.  */
-
-struct bound_minimal_symbol lookup_minimal_symbol_solib_trampoline
-    (const char *,
-     struct objfile *);
 
 /* Look through all the current minimal symbol tables and find the
    first minimal symbol that matches NAME and PC.  If OBJF is non-NULL,

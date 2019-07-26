@@ -18,7 +18,7 @@
 #include "defs.h"
 #include "osabi.h"
 #include "amd64-tdep.h"
-#include "x86-xstate.h"
+#include "gdbsupport/x86-xstate.h"
 #include "gdbtypes.h"
 #include "gdbcore.h"
 #include "regcache.h"
@@ -144,7 +144,7 @@ amd64_windows_store_arg_in_reg (struct regcache *regcache,
 
   gdb_assert (TYPE_LENGTH (type) <= 8);
   memset (buf, 0, sizeof buf);
-  memcpy (buf, valbuf, std::min (TYPE_LENGTH (type), (unsigned int) 8));
+  memcpy (buf, valbuf, std::min (TYPE_LENGTH (type), (ULONGEST) 8));
   regcache->cooked_write (regno, buf);
 }
 
@@ -419,7 +419,7 @@ static const enum amd64_regnum amd64_windows_w2gdb_regnum[] =
   AMD64_R15_REGNUM
 };
 
-/* Return TRUE iff PC is the the range of the function corresponding to
+/* Return TRUE iff PC is the range of the function corresponding to
    CACHE.  */
 
 static int

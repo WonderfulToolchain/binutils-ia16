@@ -27,11 +27,12 @@ struct symtab;
 #include "frame.h"
 #include "ui-out.h"
 #include "btrace.h"
-#include "common/vec.h"
+#include "gdbsupport/vec.h"
 #include "target/waitstatus.h"
 #include "cli/cli-utils.h"
-#include "common/refcounted-object.h"
-#include "common-gdbthread.h"
+#include "gdbsupport/refcounted-object.h"
+#include "gdbsupport/common-gdbthread.h"
+#include "gdbsupport/forward-scope-exit.h"
 
 struct inferior;
 
@@ -234,7 +235,7 @@ struct private_thread_info
    reverting back (e.g., due to a "kill" command).  If the thread
    meanwhile exits before being re-selected, then the thread object is
    left listed in the thread list, but marked with state
-   THREAD_EXITED.  (See make_cleanup_restore_current_thread and
+   THREAD_EXITED.  (See scoped_restore_current_thread and
    delete_thread).  All other thread references are considered weak
    references.  Placing a thread in the thread list is an implicit
    strong reference, and is thus not accounted for in the thread's
@@ -485,8 +486,8 @@ extern struct thread_info *find_thread_ptid (inferior *inf, ptid_t ptid);
 struct thread_info *find_thread_global_id (int global_id);
 
 /* Find thread by thread library specific handle in inferior INF.  */
-struct thread_info *find_thread_by_handle (struct value *thread_handle,
-					   struct inferior *inf);
+struct thread_info *find_thread_by_handle
+  (gdb::array_view<const gdb_byte> handle, struct inferior *inf);
 
 /* Finds the first thread of the specified inferior.  */
 extern struct thread_info *first_thread_of_inferior (inferior *inf);
@@ -612,31 +613,8 @@ extern void finish_thread_state (ptid_t ptid);
 
 /* Calls finish_thread_state on scope exit, unless release() is called
    to disengage.  */
-class scoped_finish_thread_state
-{
-public:
-  explicit scoped_finish_thread_state (ptid_t ptid)
-    : m_ptid (ptid)
-  {}
-
-  ~scoped_finish_thread_state ()
-  {
-    if (!m_released)
-      finish_thread_state (m_ptid);
-  }
-
-  /* Disengage.  */
-  void release ()
-  {
-    m_released = true;
-  }
-
-  DISABLE_COPY_AND_ASSIGN (scoped_finish_thread_state);
-
-private:
-  bool m_released = false;
-  ptid_t m_ptid;
-};
+using scoped_finish_thread_state
+  = FORWARD_SCOPE_EXIT (finish_thread_state);
 
 /* Commands with a prefix of `thread'.  */
 extern struct cmd_list_element *thread_cmd_list;
@@ -654,7 +632,8 @@ extern int print_thread_events;
    all attached PIDs are printed.  If both REQUESTED_THREADS is not
    NULL and PID is not -1, then the thread is printed if it belongs to
    the specified process.  Otherwise, an error is raised.  */
-extern void print_thread_info (struct ui_out *uiout, char *requested_threads,
+extern void print_thread_info (struct ui_out *uiout,
+			       const char *requested_threads,
 			       int pid);
 
 /* Save/restore current inferior/thread/frame.  */

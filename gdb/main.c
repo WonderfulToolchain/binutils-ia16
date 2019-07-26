@@ -40,13 +40,14 @@
 #include "maint.h"
 
 #include "filenames.h"
-#include "filestuff.h"
+#include "gdbsupport/filestuff.h"
 #include <signal.h>
 #include "event-top.h"
 #include "infrun.h"
-#include "signals-state-save-restore.h"
+#include "gdbsupport/signals-state-save-restore.h"
 #include <vector>
-#include "common/pathstuff.h"
+#include "gdbsupport/pathstuff.h"
+#include "cli/cli-style.h"
 
 /* The selected interpreter.  This will be used as a set command
    variable, so it should always be malloc'ed - since
@@ -259,7 +260,7 @@ get_init_files (const char **system_gdbinit,
 
       if (homedir)
 	{
-	  homeinit = xstrprintf ("%s/%s", homedir, gdbinit);
+	  homeinit = xstrprintf ("%s/%s", homedir, GDBINIT);
 	  if (stat (homeinit, &homebuf) != 0)
 	    {
 	      xfree (homeinit);
@@ -267,12 +268,12 @@ get_init_files (const char **system_gdbinit,
 	    }
 	}
 
-      if (stat (gdbinit, &cwdbuf) == 0)
+      if (stat (GDBINIT, &cwdbuf) == 0)
 	{
 	  if (!homeinit
 	      || memcmp ((char *) &homebuf, (char *) &cwdbuf,
 			 sizeof (struct stat)))
-	    localinit = gdbinit;
+	    localinit = GDBINIT;
 	}
       
       initialized = 1;
@@ -329,14 +330,6 @@ captured_command_loop ()
   /* Now it's time to start the event loop.  */
   start_event_loop ();
 
-  /* FIXME: cagney/1999-11-05: A correct command_loop() implementaton
-     would clean things up (restoring the cleanup chain) to the state
-     they were just prior to the call.  Technically, this means that
-     the do_cleanups() below is redundant.  Unfortunately, many FUNCs
-     are not that well behaved.  do_cleanups should either be replaced
-     with a do_cleanups call (to cover the problem) or an assertion
-     check to detect bad FUNCs code.  */
-  do_cleanups (all_cleanups ());
   /* If the command_loop returned, normally (rather than threw an
      error) we try to quit.  If the quit is aborted, our caller
      catches the signal and restarts the command loop.  */
@@ -346,7 +339,7 @@ captured_command_loop ()
 /* Handle command errors thrown from within catch_command_errors.  */
 
 static int
-handle_command_errors (struct gdb_exception e)
+handle_command_errors (const struct gdb_exception &e)
 {
   if (e.reason < 0)
     {
@@ -372,7 +365,7 @@ static int
 catch_command_errors (catch_command_errors_const_ftype command,
 		      const char *arg, int from_tty)
 {
-  TRY
+  try
     {
       int was_sync = current_ui->prompt_state == PROMPT_BLOCKED;
 
@@ -380,11 +373,10 @@ catch_command_errors (catch_command_errors_const_ftype command,
 
       maybe_wait_sync_command_done (was_sync);
     }
-  CATCH (e, RETURN_MASK_ALL)
+  catch (const gdb_exception &e)
     {
       return handle_command_errors (e);
     }
-  END_CATCH
 
   return 1;
 }
@@ -506,8 +498,6 @@ captured_main_1 (struct captured_main_args *context)
 #endif
 
   notice_open_fds ();
-
-  saved_command_line = (char *) xstrdup ("");
 
 #ifdef __MINGW32__
   /* Ensure stderr is unbuffered.  A Cygwin pty or pipe is implemented
@@ -850,7 +840,12 @@ captured_main_1 (struct captured_main_args *context)
       }
 
     if (batch_flag)
-      quiet = 1;
+      {
+	quiet = 1;
+
+	/* Disable all output styling when running in batch mode.  */
+	cli_styling = 0;
+      }
   }
 
   save_original_signals_state (quiet);
@@ -1123,7 +1118,7 @@ captured_main_1 (struct captured_main_args *context)
      We wait until now because it is common to add to the source search
      path in local_gdbinit.  */
   global_auto_load = save_auto_load;
-  for (objfile *objfile : all_objfiles (current_program_space))
+  for (objfile *objfile : current_program_space->objfiles ())
     load_auto_scripts_for_objfile (objfile);
 
   /* Process '-x' and '-ex' options.  */
@@ -1171,15 +1166,14 @@ captured_main (void *data)
      change - SET_TOP_LEVEL() - has been eliminated.  */
   while (1)
     {
-      TRY
+      try
 	{
 	  captured_command_loop ();
 	}
-      CATCH (ex, RETURN_MASK_ALL)
+      catch (const gdb_exception &ex)
 	{
 	  exception_print (gdb_stderr, ex);
 	}
-      END_CATCH
     }
   /* No exit -- exit is through quit_command.  */
 }
@@ -1187,15 +1181,14 @@ captured_main (void *data)
 int
 gdb_main (struct captured_main_args *args)
 {
-  TRY
+  try
     {
       captured_main (args);
     }
-  CATCH (ex, RETURN_MASK_ALL)
+  catch (const gdb_exception &ex)
     {
       exception_print (gdb_stderr, ex);
     }
-  END_CATCH
 
   /* The only way to end up here is by an error (normal exit is
      handled by quit_force()), hence always return an error status.  */

@@ -48,9 +48,6 @@
 #define LP_INSN(x)	 ((MAJOR_OPCODE (x) == 0x4) \
 			  && (SUB_OPCODE (x) == 0x28))
 
-/* Equal to MAX_PRECISION in atof-ieee.c.  */
-#define MAX_LITTLENUMS 6
-
 #ifndef TARGET_WITH_CPU
 #define TARGET_WITH_CPU "arc700"
 #endif /* TARGET_WITH_CPU */
@@ -3271,7 +3268,7 @@ md_convert_frag (bfd *abfd ATTRIBUTE_UNUSED,
   int size, fix;
   struct arc_relax_type *relax_arg = &fragP->tc_frag_data;
 
-  fix = (fragP->fr_fix < 0 ? 0 : fragP->fr_fix);
+  fix = fragP->fr_fix;
   dest = fragP->fr_literal + fix;
   table_entry = TC_GENERIC_RELAX_TABLE + fragP->fr_subtype;
 

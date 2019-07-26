@@ -1136,9 +1136,7 @@ mn10300_elf_check_relocs (bfd *abfd,
 	/* This relocation describes which C++ vtable entries are actually
 	   used.  Record for later use during GC.  */
 	case R_MN10300_GNU_VTENTRY:
-	  BFD_ASSERT (h != NULL);
-	  if (h != NULL
-	      && !bfd_elf_gc_record_vtentry (abfd, sec, h, rel->r_addend))
+	  if (!bfd_elf_gc_record_vtentry (abfd, sec, h, rel->r_addend))
 	    goto fail;
 	  break;
 
@@ -4669,9 +4667,8 @@ elf_mn10300_mach (flagword flags)
    file.  This gets the MN10300 architecture right based on the machine
    number.  */
 
-static void
-_bfd_mn10300_elf_final_write_processing (bfd *abfd,
-					 bfd_boolean linker ATTRIBUTE_UNUSED)
+static bfd_boolean
+_bfd_mn10300_elf_final_write_processing (bfd *abfd)
 {
   unsigned long val;
 
@@ -4693,6 +4690,7 @@ _bfd_mn10300_elf_final_write_processing (bfd *abfd,
 
   elf_elfheader (abfd)->e_flags &= ~ (EF_MN10300_MACH);
   elf_elfheader (abfd)->e_flags |= val;
+  return _bfd_elf_final_write_processing (abfd);
 }
 
 static bfd_boolean

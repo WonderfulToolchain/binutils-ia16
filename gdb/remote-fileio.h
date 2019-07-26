@@ -22,9 +22,10 @@
 #ifndef REMOTE_FILEIO_H
 #define REMOTE_FILEIO_H
 
-#include "fileio.h"
+#include "gdbsupport/fileio.h"
 
 struct cmd_list_element;
+struct remote_target;
 
 /* Unified interface to remote fileio, called in remote.c from
    remote_wait () and remote_async_wait ().  */

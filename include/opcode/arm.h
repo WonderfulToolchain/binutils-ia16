@@ -72,6 +72,7 @@
 #define ARM_EXT2_V8_5A	     0x00001000	/* ARM V8.5A.			     */
 #define ARM_EXT2_SB	     0x00002000	/* Speculation Barrier instruction.  */
 #define ARM_EXT2_PREDRES     0x00004000	/* Prediction Restriction insns.     */
+#define ARM_EXT2_V8_1M_MAIN  0x00008000 /* ARMv8.1-M Mainline.		     */
 
 /* Co-processor space extensions.  */
 #define ARM_CEXT_XSCALE	     0x00000001	/* Allow MIA etc.	 	   */
@@ -102,6 +103,8 @@
 #define FPU_VFP_EXT_ARMV8xD  0x00002000	/* Single-precision FP for ARMv8.  */
 #define FPU_NEON_EXT_RDMA    0x00001000	/* v8.1 Adv.SIMD extensions.	   */
 #define FPU_NEON_EXT_DOTPROD 0x00000800	/* Dot Product extension.	   */
+#define FPU_MVE		     0x00000400 /* MVE Integer extension.	   */
+#define FPU_MVE_FP	     0x00000200 /* MVE Floating Point extension.   */
 
 /* Architectures are the sum of the base and extensions.  The ARM ARM (rev E)
    defines the following: ARMv3, ARMv3M, ARMv4xM, ARMv4, ARMv4TxM, ARMv4T,
@@ -175,6 +178,9 @@
 #define ARM_AEXT2_V8M_MAIN_DSP	 ARM_AEXT2_V8M_MAIN
 #define ARM_AEXT_V8R		 ARM_AEXT_V8A
 #define ARM_AEXT2_V8R		 ARM_AEXT2_V8AR
+#define ARM_AEXT_V8_1M_MAIN	 ARM_AEXT_V8M_MAIN
+#define ARM_AEXT2_V8_1M_MAIN	(ARM_AEXT2_V8M_MAIN | ARM_EXT2_V8_1M_MAIN     \
+						    | ARM_EXT2_FP16_INST)
 
 /* Processors with specific extensions in the co-processor space.  */
 #define ARM_ARCH_XSCALE	ARM_FEATURE_LOW (ARM_AEXT_V5TE, ARM_CEXT_XSCALE)
@@ -205,6 +211,7 @@
 					     | FPU_VFP_EXT_ARMV8xD)
 #define FPU_NEON_ARMV8	  (FPU_NEON_EXT_V1   | FPU_NEON_EXT_FMA	   \
 					     | FPU_NEON_EXT_ARMV8)
+#define FPU_NEON_ARMV8_1  (FPU_NEON_ARMV8    | FPU_NEON_EXT_RDMA)
 #define FPU_CRYPTO_ARMV8  (FPU_CRYPTO_EXT_ARMV8)
 #define FPU_VFP_HARD	  (FPU_VFP_EXT_V1xD  | FPU_VFP_EXT_V1	   \
 					     | FPU_VFP_EXT_V2	   \
@@ -264,19 +271,35 @@
 						    | FPU_NEON_EXT_DOTPROD)
 #define ARCH_CRC_ARMV8		ARM_FEATURE_COPROC (CRC_EXT_ARMV8)
 #define FPU_ARCH_NEON_VFP_ARMV8_1					 \
-				ARM_FEATURE_COPROC (FPU_NEON_ARMV8	 \
-						    | FPU_VFP_ARMV8	 \
-						    | FPU_NEON_EXT_RDMA)
+				ARM_FEATURE_COPROC (FPU_NEON_ARMV8_1	 \
+						    | FPU_VFP_ARMV8)
 #define FPU_ARCH_CRYPTO_NEON_VFP_ARMV8_1				 \
 				ARM_FEATURE_COPROC (FPU_CRYPTO_ARMV8	 \
-						    | FPU_NEON_ARMV8	 \
-						    | FPU_VFP_ARMV8	 \
-						    | FPU_NEON_EXT_RDMA)
-#define FPU_ARCH_DOTPROD_NEON_VFP_ARMV8					 \
-				ARM_FEATURE_COPROC (FPU_NEON_EXT_DOTPROD \
-						    | FPU_NEON_ARMV8	 \
+						    | FPU_NEON_ARMV8_1	 \
 						    | FPU_VFP_ARMV8)
 
+#define FPU_ARCH_DOTPROD_NEON_VFP_ARMV8					 \
+				ARM_FEATURE_COPROC (FPU_NEON_EXT_DOTPROD \
+						    | FPU_NEON_ARMV8_1	 \
+						    | FPU_VFP_ARMV8)
+
+#define FPU_ARCH_NEON_VFP_ARMV8_2_FP16					 \
+      ARM_FEATURE (0, ARM_EXT2_FP16_INST,				 \
+		   FPU_NEON_ARMV8_1 | FPU_VFP_ARMV8)
+
+#define FPU_ARCH_NEON_VFP_ARMV8_2_FP16FML				 \
+      ARM_FEATURE (0, ARM_EXT2_FP16_INST | ARM_EXT2_FP16_FML,		 \
+		   FPU_NEON_ARMV8_1 | FPU_VFP_ARMV8)
+
+#define FPU_ARCH_NEON_VFP_ARMV8_4_FP16FML				 \
+      ARM_FEATURE (0, ARM_EXT2_FP16_INST | ARM_EXT2_FP16_FML,		 \
+		   FPU_NEON_ARMV8_1 | FPU_VFP_ARMV8 | FPU_NEON_EXT_DOTPROD)
+
+#define FPU_ARCH_CRYPTO_NEON_VFP_ARMV8_4				 \
+			      ARM_FEATURE_COPROC (FPU_CRYPTO_ARMV8	 \
+						  | FPU_NEON_ARMV8_1	 \
+						  | FPU_VFP_ARMV8	 \
+						  | FPU_NEON_EXT_DOTPROD)
 
 #define FPU_ARCH_ENDIAN_PURE ARM_FEATURE_COPROC (FPU_ENDIAN_PURE)
 
@@ -336,6 +359,8 @@
 #define ARM_ARCH_V8M_MAIN_DSP  ARM_FEATURE_CORE (ARM_AEXT_V8M_MAIN_DSP,	   \
 						 ARM_AEXT2_V8M_MAIN_DSP)
 #define ARM_ARCH_V8R	       ARM_FEATURE_CORE (ARM_AEXT_V8R, ARM_AEXT2_V8R)
+#define ARM_ARCH_V8_1M_MAIN    ARM_FEATURE_CORE (ARM_AEXT_V8_1M_MAIN,	   \
+						 ARM_AEXT2_V8_1M_MAIN)
 
 /* Some useful combinations:  */
 #define ARM_ARCH_NONE	ARM_FEATURE_LOW (0, 0)

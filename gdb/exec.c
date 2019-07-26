@@ -45,7 +45,7 @@
 #include <sys/stat.h>
 #include "solist.h"
 #include <algorithm>
-#include "common/pathstuff.h"
+#include "gdbsupport/pathstuff.h"
 
 void (*deprecated_file_changed_hook) (const char *);
 
@@ -148,7 +148,7 @@ void
 try_open_exec_file (const char *exec_file_host, struct inferior *inf,
 		    symfile_add_flags add_flags)
 {
-  struct gdb_exception prev_err = exception_none;
+  struct gdb_exception prev_err;
 
   /* exec_file_attach and symbol_file_add_main may throw an error if the file
      cannot be opened either locally or remotely.
@@ -161,41 +161,31 @@ try_open_exec_file (const char *exec_file_host, struct inferior *inf,
      Even without a symbol file, the remote-based debugging session should
      continue normally instead of ending abruptly.  Hence we catch thrown
      errors/exceptions in the following code.  */
-  std::string saved_message;
-  TRY
+  try
     {
       /* We must do this step even if exec_file_host is NULL, so that
 	 exec_file_attach will clear state.  */
       exec_file_attach (exec_file_host, add_flags & SYMFILE_VERBOSE);
     }
-  CATCH (err, RETURN_MASK_ERROR)
+  catch (gdb_exception_error &err)
     {
       if (err.message != NULL)
-	warning ("%s", err.message);
+	warning ("%s", err.what ());
 
-      prev_err = err;
-
-      /* Save message so it doesn't get trashed by the catch below.  */
-      if (err.message != NULL)
-	{
-	  saved_message = err.message;
-	  prev_err.message = saved_message.c_str ();
-	}
+      prev_err = std::move (err);
     }
-  END_CATCH
 
   if (exec_file_host != NULL)
     {
-      TRY
+      try
 	{
 	  symbol_file_add_main (exec_file_host, add_flags);
 	}
-      CATCH (err, RETURN_MASK_ERROR)
+      catch (const gdb_exception_error &err)
 	{
 	  if (!exception_print_same (prev_err, err))
-	    warning ("%s", err.message);
+	    warning ("%s", err.what ());
 	}
-      END_CATCH
     }
 }
 

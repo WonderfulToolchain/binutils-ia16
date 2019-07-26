@@ -27,9 +27,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include "fileio.h"
-
-extern int remote_debug;
+#include "gdbsupport/fileio.h"
 
 struct fd_list
 {

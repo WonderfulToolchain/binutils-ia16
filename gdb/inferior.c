@@ -29,7 +29,7 @@
 #include "observable.h"
 #include "gdbcore.h"
 #include "symfile.h"
-#include "environ.h"
+#include "gdbsupport/environ.h"
 #include "cli/cli-utils.h"
 #include "continuations.h"
 #include "arch-utils.h"
@@ -126,7 +126,7 @@ add_inferior (int pid)
       if (pid != 0)
 	printf_unfiltered (_("[New inferior %d (%s)]\n"),
 			   inf->num,
-			   target_pid_to_str (ptid_t (pid)));
+			   target_pid_to_str (ptid_t (pid)).c_str ());
       else
 	printf_unfiltered (_("[New inferior %d]\n"), inf->num);
     }
@@ -191,7 +191,7 @@ exit_inferior_1 (struct inferior *inftoex, int silent)
   gdb::observers::inferior_exit.notify (inf);
 
   inf->pid = 0;
-  inf->fake_pid_p = 0;
+  inf->fake_pid_p = false;
   inf->priv = NULL;
 
   if (inf->vfork_parent != NULL)
@@ -208,6 +208,10 @@ exit_inferior_1 (struct inferior *inftoex, int silent)
   inf->pending_detach = 0;
   /* Reset it.  */
   inf->control = inferior_control_state (NO_STOP_QUIETLY);
+
+  /* Clear the register cache and the frame cache.  */
+  registers_changed ();
+  reinit_frame_cache ();
 }
 
 void
@@ -243,7 +247,7 @@ detach_inferior (inferior *inf)
   if (print_inferior_events)
     printf_unfiltered (_("[Inferior %d (%s) detached]\n"),
 		       inf->num,
-		       target_pid_to_str (ptid_t (pid)));
+		       target_pid_to_str (ptid_t (pid)).c_str ());
 }
 
 void
@@ -407,7 +411,7 @@ number_of_inferiors (void)
 /* Converts an inferior process id to a string.  Like
    target_pid_to_str, but special cases the null process.  */
 
-static const char *
+static std::string
 inferior_pid_to_str (int pid)
 {
   if (pid != 0)
@@ -428,7 +432,7 @@ print_selected_inferior (struct ui_out *uiout)
     filename = _("<noexec>");
 
   uiout->message (_("[Switching to inferior %d [%s] (%s)]\n"),
-		  inf->num, inferior_pid_to_str (inf->pid), filename);
+		  inf->num, inferior_pid_to_str (inf->pid).c_str (), filename);
 }
 
 /* Prints the list of inferiors and their details on UIOUT.  This is a
@@ -477,7 +481,7 @@ print_inferior (struct ui_out *uiout, const char *requested_inferiors)
       else
 	uiout->field_skip ("current");
 
-      uiout->field_int ("number", inf->num);
+      uiout->field_signed ("number", inf->num);
 
       uiout->field_string ("target-id", inferior_pid_to_str (inf->pid));
 
@@ -492,12 +496,12 @@ print_inferior (struct ui_out *uiout, const char *requested_inferiors)
       if (inf->vfork_parent)
 	{
 	  uiout->text (_("\n\tis vfork child of inferior "));
-	  uiout->field_int ("vfork-parent", inf->vfork_parent->num);
+	  uiout->field_signed ("vfork-parent", inf->vfork_parent->num);
 	}
       if (inf->vfork_child)
 	{
 	  uiout->text (_("\n\tis vfork parent of inferior "));
-	  uiout->field_int ("vfork-child", inf->vfork_child->num);
+	  uiout->field_signed ("vfork-child", inf->vfork_child->num);
 	}
 
       uiout->text ("\n");
@@ -930,8 +934,8 @@ The new inferior ID must be currently known."),
 
   add_setshow_boolean_cmd ("inferior-events", no_class,
          &print_inferior_events, _("\
-Set printing of inferior events (e.g., inferior start and exit)."), _("\
-Show printing of inferior events (e.g., inferior start and exit)."), NULL,
+Set printing of inferior events (such as inferior start and exit)."), _("\
+Show printing of inferior events (such as inferior start and exit)."), NULL,
          NULL,
          show_print_inferior_events,
          &setprintlist, &showprintlist);

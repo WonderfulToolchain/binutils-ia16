@@ -60,7 +60,7 @@ struct syscall;
 struct agent_expr;
 struct axs_value;
 struct stap_parse_info;
-struct parser_state;
+struct expr_builder;
 struct ravenscar_arch_ops;
 struct mem_range;
 struct syscalls_info;
@@ -649,6 +649,18 @@ typedef CORE_ADDR (gdbarch_fetch_tls_load_module_address_ftype) (struct objfile 
 extern CORE_ADDR gdbarch_fetch_tls_load_module_address (struct gdbarch *gdbarch, struct objfile *objfile);
 extern void set_gdbarch_fetch_tls_load_module_address (struct gdbarch *gdbarch, gdbarch_fetch_tls_load_module_address_ftype *fetch_tls_load_module_address);
 
+/* Return the thread-local address at OFFSET in the thread-local
+   storage for the thread PTID and the shared library or executable
+   file given by LM_ADDR.  If that block of thread-local storage hasn't
+   been allocated yet, this function may throw an error.  LM_ADDR may
+   be zero for statically linked multithreaded inferiors. */
+
+extern int gdbarch_get_thread_local_address_p (struct gdbarch *gdbarch);
+
+typedef CORE_ADDR (gdbarch_get_thread_local_address_ftype) (struct gdbarch *gdbarch, ptid_t ptid, CORE_ADDR lm_addr, CORE_ADDR offset);
+extern CORE_ADDR gdbarch_get_thread_local_address (struct gdbarch *gdbarch, ptid_t ptid, CORE_ADDR lm_addr, CORE_ADDR offset);
+extern void set_gdbarch_get_thread_local_address (struct gdbarch *gdbarch, gdbarch_get_thread_local_address_ftype *get_thread_local_address);
+
 extern CORE_ADDR gdbarch_frame_args_skip (struct gdbarch *gdbarch);
 extern void set_gdbarch_frame_args_skip (struct gdbarch *gdbarch, CORE_ADDR frame_args_skip);
 
@@ -947,8 +959,8 @@ extern void set_gdbarch_core_xfer_shared_libraries_aix (struct gdbarch *gdbarch,
 
 extern int gdbarch_core_pid_to_str_p (struct gdbarch *gdbarch);
 
-typedef const char * (gdbarch_core_pid_to_str_ftype) (struct gdbarch *gdbarch, ptid_t ptid);
-extern const char * gdbarch_core_pid_to_str (struct gdbarch *gdbarch, ptid_t ptid);
+typedef std::string (gdbarch_core_pid_to_str_ftype) (struct gdbarch *gdbarch, ptid_t ptid);
+extern std::string gdbarch_core_pid_to_str (struct gdbarch *gdbarch, ptid_t ptid);
 extern void set_gdbarch_core_pid_to_str (struct gdbarch *gdbarch, gdbarch_core_pid_to_str_ftype *core_pid_to_str);
 
 /* How the core target extracts the name of a thread from a core file. */
@@ -1338,14 +1350,44 @@ typedef int (gdbarch_stap_parse_special_token_ftype) (struct gdbarch *gdbarch, s
 extern int gdbarch_stap_parse_special_token (struct gdbarch *gdbarch, struct stap_parse_info *p);
 extern void set_gdbarch_stap_parse_special_token (struct gdbarch *gdbarch, gdbarch_stap_parse_special_token_ftype *stap_parse_special_token);
 
+/* Perform arch-dependent adjustments to a register name.
+  
+   In very specific situations, it may be necessary for the register
+   name present in a SystemTap probe's argument to be handled in a
+   special way.  For example, on i386, GCC may over-optimize the
+   register allocation and use smaller registers than necessary.  In
+   such cases, the client that is reading and evaluating the SystemTap
+   probe (ourselves) will need to actually fetch values from the wider
+   version of the register in question.
+  
+   To illustrate the example, consider the following probe argument
+   (i386):
+  
+      4@%ax
+  
+   This argument says that its value can be found at the %ax register,
+   which is a 16-bit register.  However, the argument's prefix says
+   that its type is "uint32_t", which is 32-bit in size.  Therefore, in
+   this case, GDB should actually fetch the probe's value from register
+   %eax, not %ax.  In this scenario, this function would actually
+   replace the register name from %ax to %eax.
+  
+   The rationale for this can be found at PR breakpoints/24541. */
+
+extern int gdbarch_stap_adjust_register_p (struct gdbarch *gdbarch);
+
+typedef std::string (gdbarch_stap_adjust_register_ftype) (struct gdbarch *gdbarch, struct stap_parse_info *p, const std::string &regname, int regnum);
+extern std::string gdbarch_stap_adjust_register (struct gdbarch *gdbarch, struct stap_parse_info *p, const std::string &regname, int regnum);
+extern void set_gdbarch_stap_adjust_register (struct gdbarch *gdbarch, gdbarch_stap_adjust_register_ftype *stap_adjust_register);
+
 /* DTrace related functions.
    The expression to compute the NARTGth+1 argument to a DTrace USDT probe.
    NARG must be >= 0. */
 
 extern int gdbarch_dtrace_parse_probe_argument_p (struct gdbarch *gdbarch);
 
-typedef void (gdbarch_dtrace_parse_probe_argument_ftype) (struct gdbarch *gdbarch, struct parser_state *pstate, int narg);
-extern void gdbarch_dtrace_parse_probe_argument (struct gdbarch *gdbarch, struct parser_state *pstate, int narg);
+typedef void (gdbarch_dtrace_parse_probe_argument_ftype) (struct gdbarch *gdbarch, struct expr_builder *builder, int narg);
+extern void gdbarch_dtrace_parse_probe_argument (struct gdbarch *gdbarch, struct expr_builder *builder, int narg);
 extern void set_gdbarch_dtrace_parse_probe_argument (struct gdbarch *gdbarch, gdbarch_dtrace_parse_probe_argument_ftype *dtrace_parse_probe_argument);
 
 /* True if the given ADDR does not contain the instruction sequence
@@ -1589,7 +1631,10 @@ extern void set_gdbarch_disassembler_options (struct gdbarch *gdbarch, char ** d
 extern const disasm_options_and_args_t * gdbarch_valid_disassembler_options (struct gdbarch *gdbarch);
 extern void set_gdbarch_valid_disassembler_options (struct gdbarch *gdbarch, const disasm_options_and_args_t * valid_disassembler_options);
 
-/* Type alignment. */
+/* Type alignment override method.  Return the architecture specific
+   alignment required for TYPE.  If there is no special handling
+   required for TYPE then return the value 0, GDB will then apply the
+   default rules as laid out in gdbtypes.c:type_align. */
 
 typedef ULONGEST (gdbarch_type_align_ftype) (struct gdbarch *gdbarch, struct type *type);
 extern ULONGEST gdbarch_type_align (struct gdbarch *gdbarch, struct type *type);

@@ -223,14 +223,13 @@ buffer_and_nest (const char *from, const char *to, sb *ptr,
 	     anyway, there's not an obviously better fix here.  */
 	  if (strncasecmp (ptr->ptr + i, "linefile", 8) == 0)
 	    {
-	      char *saved_input_line_pointer = input_line_pointer;
 	      char saved_eol_char = ptr->ptr[ptr->len];
 
 	      ptr->ptr[ptr->len] = '\0';
-	      input_line_pointer = ptr->ptr + i + 8;
+	      temp_ilp (ptr->ptr + i + 8);
 	      s_app_line (0);
+	      restore_ilp ();
 	      ptr->ptr[ptr->len] = saved_eol_char;
-	      input_line_pointer = saved_input_line_pointer;
 	      ptr->len = line_start;
 	    }
 	}
@@ -285,8 +284,8 @@ getstring (size_t idx, sb *in, sb *acc)
 	{
 	  int nest = 0;
 	  idx++;
-	  while ((in->ptr[idx] != '>' || nest)
-		 && idx < in->len)
+	  while (idx < in->len
+		 && (in->ptr[idx] != '>' || nest))
 	    {
 	      if (in->ptr[idx] == '!')
 		{
@@ -375,7 +374,7 @@ get_any_string (size_t idx, sb *in, sb *out)
       else if (in->ptr[idx] == '%' && macro_alternate)
 	{
 	  offsetT val;
-	  char buf[20];
+	  char buf[64];
 
 	  /* Turns the next expression into a string.  */
 	  /* xgettext: no-c-format */

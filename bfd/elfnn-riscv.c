@@ -2059,7 +2059,9 @@ riscv_elf_relocate_section (bfd *output_bfd,
 	     all relocs to update these addends.  This is also ambiguous, as
 	     we do allow offsets to be added to the target address, which are
 	     not to be used to find the auipc address.  */
-	  if ((ELF_ST_TYPE (sym->st_info) == STT_SECTION) && rel->r_addend)
+	  if (((sym != NULL && (ELF_ST_TYPE (sym->st_info) == STT_SECTION))
+	       || (h != NULL && h->type == STT_SECTION))
+	      && rel->r_addend)
 	    {
 	      r = bfd_reloc_dangerous;
 	      break;
@@ -2663,6 +2665,420 @@ riscv_float_abi_string (flagword flags)
     }
 }
 
+/* The information of architecture attribute.  */
+static riscv_subset_list_t in_subsets;
+static riscv_subset_list_t out_subsets;
+static riscv_subset_list_t merged_subsets;
+
+/* Predicator for standard extension.  */
+
+static bfd_boolean
+riscv_std_ext_p (const char *name)
+{
+  return (strlen (name) == 1) && (name[0] != 'x') && (name[0] != 's');
+}
+
+/* Predicator for non-standard extension.  */
+
+static bfd_boolean
+riscv_non_std_ext_p (const char *name)
+{
+  return (strlen (name) >= 2) && (name[0] == 'x');
+}
+
+/* Predicator for standard supervisor extension.  */
+
+static bfd_boolean
+riscv_std_sv_ext_p (const char *name)
+{
+  return (strlen (name) >= 2) && (name[0] == 's') && (name[1] != 'x');
+}
+
+/* Predicator for non-standard supervisor extension.  */
+
+static bfd_boolean
+riscv_non_std_sv_ext_p (const char *name)
+{
+  return (strlen (name) >= 3) && (name[0] == 's') && (name[1] == 'x');
+}
+
+/* Error handler when version mis-match.  */
+
+static void
+riscv_version_mismatch (bfd *ibfd,
+			struct riscv_subset_t *in,
+			struct riscv_subset_t *out)
+{
+  _bfd_error_handler
+    (_("error: %pB: Mis-matched ISA version for '%s' extension. "
+       "%d.%d vs %d.%d"),
+       ibfd, in->name,
+       in->major_version, in->minor_version,
+       out->major_version, out->minor_version);
+}
+
+/* Return true if subset is 'i' or 'e'.  */
+
+static bfd_boolean
+riscv_i_or_e_p (bfd *ibfd,
+		const char *arch,
+		struct riscv_subset_t *subset)
+{
+  if ((strcasecmp (subset->name, "e") != 0)
+      && (strcasecmp (subset->name, "i") != 0))
+    {
+      _bfd_error_handler
+	(_("error: %pB: corrupted ISA string '%s'. "
+	   "First letter should be 'i' or 'e' but got '%s'."),
+	   ibfd, arch, subset->name);
+      return FALSE;
+    }
+  return TRUE;
+}
+
+/* Merge standard extensions.
+
+   Return Value:
+     Return FALSE if failed to merge.
+
+   Arguments:
+     `bfd`: bfd handler.
+     `in_arch`: Raw arch string for input object.
+     `out_arch`: Raw arch string for output object.
+     `pin`: subset list for input object, and it'll skip all merged subset after
+            merge.
+     `pout`: Like `pin`, but for output object.  */
+
+static bfd_boolean
+riscv_merge_std_ext (bfd *ibfd,
+		     const char *in_arch,
+		     const char *out_arch,
+		     struct riscv_subset_t **pin,
+		     struct riscv_subset_t **pout)
+{
+  const char *standard_exts = riscv_supported_std_ext ();
+  const char *p;
+  struct riscv_subset_t *in = *pin;
+  struct riscv_subset_t *out = *pout;
+
+  /* First letter should be 'i' or 'e'.  */
+  if (!riscv_i_or_e_p (ibfd, in_arch, in))
+    return FALSE;
+
+  if (!riscv_i_or_e_p (ibfd, out_arch, out))
+    return FALSE;
+
+  if (in->name[0] != out->name[0])
+    {
+      /* TODO: We might allow merge 'i' with 'e'.  */
+      _bfd_error_handler
+	(_("error: %pB: Mis-matched ISA string to merge '%s' and '%s'."),
+	 ibfd, in->name, out->name);
+      return FALSE;
+    }
+  else if ((in->major_version != out->major_version) ||
+	   (in->minor_version != out->minor_version))
+    {
+      /* TODO: Allow different merge policy.  */
+      riscv_version_mismatch (ibfd, in, out);
+      return FALSE;
+    }
+  else
+    riscv_add_subset (&merged_subsets,
+		      in->name, in->major_version, in->minor_version);
+
+  in = in->next;
+  out = out->next;
+
+  /* Handle standard extension first.  */
+  for (p = standard_exts; *p; ++p)
+    {
+      char find_ext[2] = {*p, '\0'};
+      struct riscv_subset_t *find_in =
+	riscv_lookup_subset (&in_subsets, find_ext);
+      struct riscv_subset_t *find_out =
+	riscv_lookup_subset (&out_subsets, find_ext);
+
+      if (find_in == NULL && find_out == NULL)
+	continue;
+
+      /* Check version is same or not.  */
+      /* TODO: Allow different merge policy.  */
+      if ((find_in != NULL && find_out != NULL)
+	  && ((find_in->major_version != find_out->major_version)
+	      || (find_in->minor_version != find_out->minor_version)))
+	{
+	  riscv_version_mismatch (ibfd, in, out);
+	  return FALSE;
+	}
+
+      struct riscv_subset_t *merged = find_in ? find_in : find_out;
+      riscv_add_subset (&merged_subsets, merged->name,
+			merged->major_version, merged->minor_version);
+    }
+
+  /* Skip all standard extensions.  */
+  while ((in != NULL) && riscv_std_ext_p (in->name)) in = in->next;
+  while ((out != NULL) && riscv_std_ext_p (out->name)) out = out->next;
+
+  *pin = in;
+  *pout = out;
+
+  return TRUE;
+}
+
+/* Merge non-standard and supervisor extensions.
+   Return Value:
+     Return FALSE if failed to merge.
+
+   Arguments:
+     `bfd`: bfd handler.
+     `in_arch`: Raw arch string for input object.
+     `out_arch`: Raw arch string for output object.
+     `pin`: subset list for input object, and it'll skip all merged subset after
+            merge.
+     `pout`: Like `pin`, but for output object. */
+
+static bfd_boolean
+riscv_merge_non_std_and_sv_ext (bfd *ibfd,
+				riscv_subset_t **pin,
+				riscv_subset_t **pout,
+				bfd_boolean (*predicate_func) (const char *))
+{
+  riscv_subset_t *in = *pin;
+  riscv_subset_t *out = *pout;
+
+  for (in = *pin; in != NULL && predicate_func (in->name); in = in->next)
+    riscv_add_subset (&merged_subsets, in->name, in->major_version,
+		      in->minor_version);
+
+  for (out = *pout; out != NULL && predicate_func (out->name); out = out->next)
+    {
+      riscv_subset_t *find_ext =
+	riscv_lookup_subset (&merged_subsets, out->name);
+      if (find_ext != NULL)
+	{
+	  /* Check version is same or not. */
+	  /* TODO: Allow different merge policy.  */
+	  if ((find_ext->major_version != out->major_version)
+	      || (find_ext->minor_version != out->minor_version))
+	    {
+	      riscv_version_mismatch (ibfd, find_ext, out);
+	      return FALSE;
+	    }
+	}
+      else
+	riscv_add_subset (&merged_subsets, out->name,
+			  out->major_version, out->minor_version);
+    }
+
+  *pin = in;
+  *pout = out;
+  return TRUE;
+}
+
+/* Merge Tag_RISCV_arch attribute.  */
+
+static char *
+riscv_merge_arch_attr_info (bfd *ibfd, char *in_arch, char *out_arch)
+{
+  riscv_subset_t *in, *out;
+  char *merged_arch_str;
+
+  unsigned xlen_in, xlen_out;
+  merged_subsets.head = NULL;
+  merged_subsets.tail = NULL;
+
+  riscv_parse_subset_t rpe_in;
+  riscv_parse_subset_t rpe_out;
+
+  rpe_in.subset_list = &in_subsets;
+  rpe_in.error_handler = _bfd_error_handler;
+  rpe_in.xlen = &xlen_in;
+
+  rpe_out.subset_list = &out_subsets;
+  rpe_out.error_handler = _bfd_error_handler;
+  rpe_out.xlen = &xlen_out;
+
+  if (in_arch == NULL && out_arch == NULL)
+    return NULL;
+
+  if (in_arch == NULL && out_arch != NULL)
+    return out_arch;
+
+  if (in_arch != NULL && out_arch == NULL)
+    return in_arch;
+
+  /* Parse subset from arch string.  */
+  if (!riscv_parse_subset (&rpe_in, in_arch))
+    return NULL;
+
+  if (!riscv_parse_subset (&rpe_out, out_arch))
+    return NULL;
+
+  /* Checking XLEN.  */
+  if (xlen_out != xlen_in)
+    {
+      _bfd_error_handler
+	(_("error: %pB: ISA string of input (%s) doesn't match "
+	   "output (%s)."), ibfd, in_arch, out_arch);
+      return NULL;
+    }
+
+  /* Merge subset list.  */
+  in = in_subsets.head;
+  out = out_subsets.head;
+
+  /* Merge standard extension.  */
+  if (!riscv_merge_std_ext (ibfd, in_arch, out_arch, &in, &out))
+    return NULL;
+  /* Merge non-standard extension.  */
+  if (!riscv_merge_non_std_and_sv_ext (ibfd, &in, &out, riscv_non_std_ext_p))
+    return NULL;
+  /* Merge standard supervisor extension.  */
+  if (!riscv_merge_non_std_and_sv_ext (ibfd, &in, &out, riscv_std_sv_ext_p))
+    return NULL;
+  /* Merge non-standard supervisor extension.  */
+  if (!riscv_merge_non_std_and_sv_ext (ibfd, &in, &out, riscv_non_std_sv_ext_p))
+    return NULL;
+
+  if (xlen_in != xlen_out)
+    {
+      _bfd_error_handler
+	(_("error: %pB: XLEN of input (%u) doesn't match "
+	   "output (%u)."), ibfd, xlen_in, xlen_out);
+      return NULL;
+    }
+
+  if (xlen_in != ARCH_SIZE)
+    {
+      _bfd_error_handler
+	(_("error: %pB: Unsupported XLEN (%u), you might be "
+	   "using wrong emulation."), ibfd, xlen_in);
+      return NULL;
+    }
+
+  merged_arch_str = riscv_arch_str (ARCH_SIZE, &merged_subsets);
+
+  /* Release the subset lists.  */
+  riscv_release_subset_list (&in_subsets);
+  riscv_release_subset_list (&out_subsets);
+  riscv_release_subset_list (&merged_subsets);
+
+  return merged_arch_str;
+}
+
+/* Merge object attributes from IBFD into output_bfd of INFO.
+   Raise an error if there are conflicting attributes.  */
+
+static bfd_boolean
+riscv_merge_attributes (bfd *ibfd, struct bfd_link_info *info)
+{
+  bfd *obfd = info->output_bfd;
+  obj_attribute *in_attr;
+  obj_attribute *out_attr;
+  bfd_boolean result = TRUE;
+  const char *sec_name = get_elf_backend_data (ibfd)->obj_attrs_section;
+  unsigned int i;
+
+  /* Skip linker created files.  */
+  if (ibfd->flags & BFD_LINKER_CREATED)
+    return TRUE;
+
+  /* Skip any input that doesn't have an attribute section.
+     This enables to link object files without attribute section with
+     any others.  */
+  if (bfd_get_section_by_name (ibfd, sec_name) == NULL)
+    return TRUE;
+
+  if (!elf_known_obj_attributes_proc (obfd)[0].i)
+    {
+      /* This is the first object.  Copy the attributes.  */
+      _bfd_elf_copy_obj_attributes (ibfd, obfd);
+
+      out_attr = elf_known_obj_attributes_proc (obfd);
+
+      /* Use the Tag_null value to indicate the attributes have been
+	 initialized.  */
+      out_attr[0].i = 1;
+
+      return TRUE;
+    }
+
+  in_attr = elf_known_obj_attributes_proc (ibfd);
+  out_attr = elf_known_obj_attributes_proc (obfd);
+
+  for (i = LEAST_KNOWN_OBJ_ATTRIBUTE; i < NUM_KNOWN_OBJ_ATTRIBUTES; i++)
+    {
+    switch (i)
+      {
+      case Tag_RISCV_arch:
+	if (!out_attr[Tag_RISCV_arch].s)
+	  out_attr[Tag_RISCV_arch].s = in_attr[Tag_RISCV_arch].s;
+	else if (in_attr[Tag_RISCV_arch].s
+		 && out_attr[Tag_RISCV_arch].s)
+	  {
+	    /* Check arch compatible.  */
+	    char *merged_arch =
+		riscv_merge_arch_attr_info (ibfd,
+					    in_attr[Tag_RISCV_arch].s,
+					    out_attr[Tag_RISCV_arch].s);
+	    if (merged_arch == NULL)
+	      {
+		result = FALSE;
+		out_attr[Tag_RISCV_arch].s = "";
+	      }
+	    else
+	      out_attr[Tag_RISCV_arch].s = merged_arch;
+	  }
+	break;
+      case Tag_RISCV_priv_spec:
+      case Tag_RISCV_priv_spec_minor:
+      case Tag_RISCV_priv_spec_revision:
+	if (out_attr[i].i != in_attr[i].i)
+	  {
+	    _bfd_error_handler
+	      (_("error: %pB: conflicting priv spec version "
+		 "(major/minor/revision)."), ibfd);
+	    result = FALSE;
+	  }
+	break;
+      case Tag_RISCV_unaligned_access:
+	out_attr[i].i |= in_attr[i].i;
+	break;
+      case Tag_RISCV_stack_align:
+	if (out_attr[i].i == 0)
+	  out_attr[i].i = in_attr[i].i;
+	else if (in_attr[i].i != 0
+		 && out_attr[i].i != 0
+		 && out_attr[i].i != in_attr[i].i)
+	  {
+	    _bfd_error_handler
+	      (_("error: %pB use %u-byte stack aligned but the output "
+		 "use %u-byte stack aligned."),
+	       ibfd, in_attr[i].i, out_attr[i].i);
+	    result = FALSE;
+	  }
+	break;
+      default:
+	result &= _bfd_elf_merge_unknown_attribute_low (ibfd, obfd, i);
+      }
+
+      /* If out_attr was copied from in_attr then it won't have a type yet.  */
+      if (in_attr[i].type && !out_attr[i].type)
+	out_attr[i].type = in_attr[i].type;
+    }
+
+  /* Merge Tag_compatibility attributes and any common GNU ones.  */
+  if (!_bfd_elf_merge_object_attributes (ibfd, info))
+    return FALSE;
+
+  /* Check for any attributes not known on RISC-V.  */
+  result &= _bfd_elf_merge_unknown_attribute_list (ibfd, obfd);
+
+  return result;
+}
+
 /* Merge backend specific data from an object file to the output
    object file when linking.  */
 
@@ -2670,8 +3086,7 @@ static bfd_boolean
 _bfd_riscv_elf_merge_private_bfd_data (bfd *ibfd, struct bfd_link_info *info)
 {
   bfd *obfd = info->output_bfd;
-  flagword new_flags = elf_elfheader (ibfd)->e_flags;
-  flagword old_flags = elf_elfheader (obfd)->e_flags;
+  flagword new_flags, old_flags;
 
   if (!is_riscv_elf (ibfd) || !is_riscv_elf (obfd))
     return TRUE;
@@ -2688,11 +3103,45 @@ _bfd_riscv_elf_merge_private_bfd_data (bfd *ibfd, struct bfd_link_info *info)
   if (!_bfd_elf_merge_object_attributes (ibfd, info))
     return FALSE;
 
+  if (!riscv_merge_attributes (ibfd, info))
+    return FALSE;
+
+  new_flags = elf_elfheader (ibfd)->e_flags;
+  old_flags = elf_elfheader (obfd)->e_flags;
+
   if (! elf_flags_init (obfd))
     {
       elf_flags_init (obfd) = TRUE;
       elf_elfheader (obfd)->e_flags = new_flags;
       return TRUE;
+    }
+
+  /* Check to see if the input BFD actually contains any sections.  If not,
+     its flags may not have been initialized either, but it cannot actually
+     cause any incompatibility.  Do not short-circuit dynamic objects; their
+     section list may be emptied by elf_link_add_object_symbols.
+
+     Also check to see if there are no code sections in the input.  In this
+     case, there is no need to check for code specific flags.  */
+  if (!(ibfd->flags & DYNAMIC))
+    {
+      bfd_boolean null_input_bfd = TRUE;
+      bfd_boolean only_data_sections = TRUE;
+      asection *sec;
+
+      for (sec = ibfd->sections; sec != NULL; sec = sec->next)
+	{
+	  if ((bfd_get_section_flags (ibfd, sec)
+	       & (SEC_LOAD | SEC_CODE | SEC_HAS_CONTENTS))
+	      == (SEC_LOAD | SEC_CODE | SEC_HAS_CONTENTS))
+	    only_data_sections = FALSE;
+
+	  null_input_bfd = FALSE;
+	  break;
+	}
+
+      if (null_input_bfd || only_data_sections)
+	return TRUE;
     }
 
   /* Disallow linking different float ABIs.  */
@@ -2997,9 +3446,12 @@ _bfd_riscv_relax_call (bfd *abfd, asection *sec, asection *sym_sec,
   auipc = bfd_get_32 (abfd, contents + rel->r_offset);
   jalr = bfd_get_32 (abfd, contents + rel->r_offset + 4);
   rd = (jalr >> OP_SH_RD) & OP_MASK_RD;
-  rvc = rvc && VALID_RVC_J_IMM (foff) && ARCH_SIZE == 32;
+  rvc = rvc && VALID_RVC_J_IMM (foff);
 
-  if (rvc && (rd == 0 || rd == X_RA))
+  /* C.J exists on RV32 and RV64, but C.JAL is RV32-only.  */
+  rvc = rvc && (rd == 0 || (rd == X_RA && ARCH_SIZE == 32));
+
+  if (rvc)
     {
       /* Relax to C.J[AL] rd, addr.  */
       r_type = R_RISCV_RVC_JUMP;
@@ -3064,10 +3516,6 @@ _bfd_riscv_relax_lui (bfd *abfd,
   bfd_byte *contents = elf_section_data (sec)->this_hdr.contents;
   bfd_vma gp = riscv_global_pointer_value (link_info);
   int use_rvc = elf_elfheader (abfd)->e_flags & EF_RISCV_RVC;
-
-  /* Mergeable symbols and code might later move out of range.  */
-  if (sym_sec->flags & (SEC_MERGE | SEC_CODE))
-    return TRUE;
 
   BFD_ASSERT (rel->r_offset + 4 <= sec->size);
 
@@ -3429,6 +3877,7 @@ _bfd_riscv_relax_section (bfd *abfd, asection *sec,
       relax_func_t relax_func;
       int type = ELFNN_R_TYPE (rel->r_info);
       bfd_vma symval;
+      char symtype;
 
       relax_func = NULL;
       if (info->relax_pass == 0)
@@ -3494,7 +3943,7 @@ _bfd_riscv_relax_section (bfd *abfd, asection *sec,
 	    ? 0 : isym->st_size - rel->r_addend;
 
 	  if (isym->st_shndx == SHN_UNDEF)
-	    sym_sec = sec, symval = sec_addr (sec) + rel->r_offset;
+	    sym_sec = sec, symval = rel->r_offset;
 	  else
 	    {
 	      BFD_ASSERT (isym->st_shndx < elf_numsections (abfd));
@@ -3507,8 +3956,9 @@ _bfd_riscv_relax_section (bfd *abfd, asection *sec,
 	      if (sec_addr (sym_sec) == 0)
 		continue;
 #endif
-	      symval = sec_addr (sym_sec) + isym->st_value;
+	      symval = isym->st_value;
 	    }
+	  symtype = ELF_ST_TYPE (isym->st_info);
 	}
       else
 	{
@@ -3523,21 +3973,59 @@ _bfd_riscv_relax_section (bfd *abfd, asection *sec,
 	    h = (struct elf_link_hash_entry *) h->root.u.i.link;
 
 	  if (h->plt.offset != MINUS_ONE)
-	    symval = sec_addr (htab->elf.splt) + h->plt.offset;
+	    {
+	      sym_sec = htab->elf.splt;
+	      symval = h->plt.offset;
+	    }
 	  else if (h->root.u.def.section->output_section == NULL
 		   || (h->root.type != bfd_link_hash_defined
 		       && h->root.type != bfd_link_hash_defweak))
 	    continue;
 	  else
-	    symval = sec_addr (h->root.u.def.section) + h->root.u.def.value;
+	    {
+	      symval = h->root.u.def.value;
+	      sym_sec = h->root.u.def.section;
+	    }
 
 	  if (h->type != STT_FUNC)
 	    reserve_size =
 	      (h->size - rel->r_addend) > h->size ? 0 : h->size - rel->r_addend;
-	  sym_sec = h->root.u.def.section;
+	  symtype = h->type;
 	}
 
-      symval += rel->r_addend;
+      if (sym_sec->sec_info_type == SEC_INFO_TYPE_MERGE
+          && (sym_sec->flags & SEC_MERGE))
+	{
+	  /* At this stage in linking, no SEC_MERGE symbol has been
+	     adjusted, so all references to such symbols need to be
+	     passed through _bfd_merged_section_offset.  (Later, in
+	     relocate_section, all SEC_MERGE symbols *except* for
+	     section symbols have been adjusted.)
+
+	     gas may reduce relocations against symbols in SEC_MERGE
+	     sections to a relocation against the section symbol when
+	     the original addend was zero.  When the reloc is against
+	     a section symbol we should include the addend in the
+	     offset passed to _bfd_merged_section_offset, since the
+	     location of interest is the original symbol.  On the
+	     other hand, an access to "sym+addend" where "sym" is not
+	     a section symbol should not include the addend;  Such an
+	     access is presumed to be an offset from "sym";  The
+	     location of interest is just "sym".  */
+	   if (symtype == STT_SECTION)
+	     symval += rel->r_addend;
+
+	   symval = _bfd_merged_section_offset (abfd, &sym_sec,
+						elf_section_data (sym_sec)->sec_info,
+						symval);
+
+	   if (symtype != STT_SECTION)
+	     symval += rel->r_addend;
+	}
+      else
+	symval += rel->r_addend;
+
+      symval += sec_addr (sym_sec);
 
       if (!relax_func (abfd, sec, sym_sec, info, rel, symval,
 		       max_alignment, reserve_size, again,
@@ -3556,7 +4044,7 @@ fail:
 }
 
 #if ARCH_SIZE == 32
-# define PRSTATUS_SIZE			0 /* FIXME */
+# define PRSTATUS_SIZE			204
 # define PRSTATUS_OFFSET_PR_CURSIG	12
 # define PRSTATUS_OFFSET_PR_PID		24
 # define PRSTATUS_OFFSET_PR_REG		72
@@ -3654,6 +4142,14 @@ riscv_elf_object_p (bfd *abfd)
   return TRUE;
 }
 
+/* Determine whether an object attribute tag takes an integer, a
+   string or both.  */
+
+static int
+riscv_elf_obj_attrs_arg_type (int tag)
+{
+  return (tag & 1) != 0 ? ATTR_TYPE_FLAG_STR_VAL : ATTR_TYPE_FLAG_INT_VAL;
+}
 
 #define TARGET_LITTLE_SYM		riscv_elfNN_vec
 #define TARGET_LITTLE_NAME		"elfNN-littleriscv"
@@ -3695,5 +4191,14 @@ riscv_elf_object_p (bfd *abfd)
 #define elf_backend_want_dynrelro	1
 #define elf_backend_rela_normal		1
 #define elf_backend_default_execstack	0
+
+#undef  elf_backend_obj_attrs_vendor
+#define elf_backend_obj_attrs_vendor            "riscv"
+#undef  elf_backend_obj_attrs_arg_type
+#define elf_backend_obj_attrs_arg_type          riscv_elf_obj_attrs_arg_type
+#undef  elf_backend_obj_attrs_section_type
+#define elf_backend_obj_attrs_section_type      SHT_RISCV_ATTRIBUTES
+#undef  elf_backend_obj_attrs_section
+#define elf_backend_obj_attrs_section           ".riscv.attributes"
 
 #include "elfNN-target.h"

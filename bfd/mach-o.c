@@ -19,6 +19,7 @@
    MA 02110-1301, USA.  */
 
 #include "sysdep.h"
+#include <limits.h>
 #include "bfd.h"
 #include "libbfd.h"
 #include "libiberty.h"
@@ -646,7 +647,7 @@ cpusubtype (unsigned long cputype, unsigned long cpusubtype)
 	  break;
 	}
       break;
-	
+
     case BFD_MACH_O_CPU_TYPE_ARM:
       switch (cpusubtype)
 	{
@@ -666,7 +667,7 @@ cpusubtype (unsigned long cputype, unsigned long cpusubtype)
 	  break;
 	}
       break;
-      
+
     case BFD_MACH_O_CPU_TYPE_ARM64:
       switch (cpusubtype)
 	{
@@ -706,7 +707,7 @@ bfd_mach_o_bfd_print_private_bfd_data (bfd *abfd, void *ptr)
   fprintf (file, _("   sizeocmds:  %#lx\n"), (long) mdata->header.sizeofcmds);
   fprintf (file, _("   flags:      %#lx\n"), (long) mdata->header.flags);
   fprintf (file, _("   version:    %x\n"), mdata->header.version);
-  
+
   return TRUE;
 }
 
@@ -747,7 +748,7 @@ bfd_mach_o_bfd_copy_private_header_data (bfd *ibfd, bfd *obfd)
 
   /* Copy the cpusubtype.  */
   omdata->header.cpusubtype = imdata->header.cpusubtype;
-    
+
   /* Copy commands.  */
   for (icmd = imdata->first_command; icmd != NULL; icmd = icmd->next)
     {
@@ -1420,7 +1421,14 @@ long
 bfd_mach_o_get_reloc_upper_bound (bfd *abfd ATTRIBUTE_UNUSED,
 				  asection *asect)
 {
-  return (asect->reloc_count + 1) * sizeof (arelent *);
+#if SIZEOF_LONG == SIZEOF_INT
+   if (asect->reloc_count >= LONG_MAX / sizeof (arelent *))
+    {
+      bfd_set_error (bfd_error_file_too_big);
+      return -1;
+    }
+#endif
+ return (asect->reloc_count + 1) * sizeof (arelent *);
 }
 
 /* In addition to the need to byte-swap the symbol number, the bit positions
@@ -1493,7 +1501,11 @@ bfd_mach_o_canonicalize_non_scattered_reloc (bfd *abfd,
     {
       /* PR 17512: file: 006-2964-0.004.  */
       if (num > mdata->nsects)
-	return FALSE;
+	{
+	  _bfd_error_handler (_("\
+malformed mach-o reloc: section index is greater than the number of sections"));
+	  return FALSE;
+	}
 
       /* A section number.  */
       sym = mdata->sections[num - 1]->bfdsection->symbol_ptr_ptr;
@@ -1601,7 +1613,7 @@ bfd_mach_o_canonicalize_relocs (bfd *abfd, unsigned long filepos,
 {
   bfd_mach_o_backend_data *bed = bfd_mach_o_get_backend_data (abfd);
   unsigned long i;
-  struct mach_o_reloc_info_external *native_relocs;
+  struct mach_o_reloc_info_external *native_relocs = NULL;
   bfd_size_type native_size;
 
   /* Allocate and read relocs.  */
@@ -1609,7 +1621,7 @@ bfd_mach_o_canonicalize_relocs (bfd *abfd, unsigned long filepos,
 
   /* PR 17512: file: 09477b57.  */
   if (native_size < count)
-    return -1;
+    goto err;
 
   native_relocs =
     (struct mach_o_reloc_info_external *) bfd_malloc (native_size);
@@ -1628,8 +1640,11 @@ bfd_mach_o_canonicalize_relocs (bfd *abfd, unsigned long filepos,
     }
   free (native_relocs);
   return i;
+
  err:
   free (native_relocs);
+  if (bfd_get_error () == bfd_error_no_error)
+    bfd_set_error (bfd_error_invalid_operation);
   return -1;
 }
 
@@ -4920,11 +4935,11 @@ bfd_mach_o_read_command (bfd *abfd, bfd_mach_o_load_command *command)
       break;
     case BFD_MACH_O_LC_NOTE:
       if (!bfd_mach_o_read_note (abfd, command))
-        return FALSE;
+	return FALSE;
       break;
     case BFD_MACH_O_LC_BUILD_VERSION:
       if (!bfd_mach_o_read_build_version (abfd, command))
-        return FALSE;
+	return FALSE;
       break;
     default:
       command->len = 0;

@@ -82,7 +82,7 @@ do_module_cleanup (void *arg, int registers_valid)
 	}
     }
 
-  for (objfile *objfile : all_objfiles (current_program_space))
+  for (objfile *objfile : current_program_space->objfiles ())
     if ((objfile->flags & OBJF_USERLOADED) == 0
         && (strcmp (objfile_name (objfile), data->objfile_name_string) == 0))
       {
@@ -137,7 +137,7 @@ compile_object_run (struct compile_module *module)
   xfree (module);
   module = NULL;
 
-  TRY
+  try
     {
       struct type *func_type = SYMBOL_TYPE (func_sym);
       htab_t copied_types;
@@ -173,7 +173,7 @@ compile_object_run (struct compile_module *module)
       call_function_by_hand_dummy (func_val, NULL, args,
 				   do_module_cleanup, data);
     }
-  CATCH (ex, RETURN_MASK_ERROR)
+  catch (const gdb_exception_error &ex)
     {
       /* In the case of DTOR_FOUND or in the case of EXECUTED nothing
 	 needs to be done.  */
@@ -183,9 +183,8 @@ compile_object_run (struct compile_module *module)
       gdb_assert (!(dtor_found && executed));
       if (!dtor_found && !executed)
 	do_module_cleanup (data, 0);
-      throw_exception (ex);
+      throw;
     }
-  END_CATCH
 
   dtor_found = find_dummy_frame_dtor (do_module_cleanup, data);
   gdb_assert (!dtor_found && executed);

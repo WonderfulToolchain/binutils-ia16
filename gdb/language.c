@@ -45,6 +45,7 @@
 #include "frame.h"
 #include "c-lang.h"
 #include <algorithm>
+#include "gdbarch.h"
 
 static int unk_lang_parser (struct parser_state *);
 
@@ -172,18 +173,17 @@ set_language_command (const char *ignore,
 	      /* Enter auto mode.  Set to the current frame's language, if
                  known, or fallback to the initial language.  */
 	      language_mode = language_mode_auto;
-	      TRY
+	      try
 		{
 		  struct frame_info *frame;
 
 		  frame = get_selected_frame (NULL);
 		  flang = get_frame_language (frame);
 		}
-	      CATCH (ex, RETURN_MASK_ERROR)
+	      catch (const gdb_exception_error &ex)
 		{
 		  flang = language_unknown;
 		}
-	      END_CATCH
 
 	      if (flang != language_unknown)
 		set_language (flang);
@@ -560,7 +560,7 @@ add_set_language_command ()
 
   doc.printf (_("Set the current source language.\n"
 		"The currently understood settings are:\n\nlocal or "
-		"auto    Automatic setting based on source file\n"));
+		"auto    Automatic setting based on source file"));
 
   for (const auto &lang : languages)
     {
@@ -571,7 +571,9 @@ add_set_language_command ()
 
       /* FIXME: i18n: for now assume that the human-readable name is
 	 just a capitalization of the internal name.  */
-      doc.printf ("%-16s Use the %c%s language\n",
+      /* Note that we add the newline at the front, so we don't wind
+	 up with a trailing newline.  */
+      doc.printf ("\n%-16s Use the %c%s language",
 		  lang->la_name,
 		  /* Capitalize first letter of language name.  */
 		  toupper (lang->la_name[0]),
@@ -624,7 +626,7 @@ language_demangle (const struct language_defn *current_language,
   return NULL;
 }
 
-/* See langauge.h.  */
+/* See language.h.  */
 
 int
 language_sniff_from_mangled_name (const struct language_defn *lang,
@@ -720,6 +722,20 @@ default_symbol_name_matcher (const char *symbol_search_name,
     }
   else
     return false;
+}
+
+/* See language.h.  */
+
+bool
+default_is_string_type_p (struct type *type)
+{
+  type = check_typedef (type);
+  while (TYPE_CODE (type) == TYPE_CODE_REF)
+    {
+      type = TYPE_TARGET_TYPE (type);
+      type = check_typedef (type);
+    }
+  return (TYPE_CODE (type)  == TYPE_CODE_STRING);
 }
 
 /* See language.h.  */
@@ -878,7 +894,8 @@ const struct language_defn unknown_language_defn =
   &default_varobj_ops,
   NULL,
   NULL,
-  LANG_MAGIC
+  default_is_string_type_p,
+  "{...}"			/* la_struct_too_deep_ellipsis */
 };
 
 /* These two structs define fake entries for the "local" and "auto"
@@ -929,7 +946,8 @@ const struct language_defn auto_language_defn =
   &default_varobj_ops,
   NULL,
   NULL,
-  LANG_MAGIC
+  default_is_string_type_p,
+  "{...}"			/* la_struct_too_deep_ellipsis */
 };
 
 

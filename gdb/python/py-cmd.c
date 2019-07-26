@@ -27,7 +27,6 @@
 #include "cli/cli-decode.h"
 #include "completer.h"
 #include "language.h"
-#include "py-ref.h"
 
 /* Struct representing built-in completion types.  */
 struct cmdpy_completer
@@ -542,7 +541,7 @@ cmdpy_init (PyObject *self, PyObject *args, PyObject *kw)
 
   gdbpy_ref<> self_ref = gdbpy_ref<>::new_reference (self);
 
-  TRY
+  try
     {
       struct cmd_list_element *cmd;
 
@@ -573,7 +572,7 @@ cmdpy_init (PyObject *self, PyObject *args, PyObject *kw)
 	set_cmd_completer_handle_brkchars (cmd,
 					   cmdpy_completer_handle_brkchars);
     }
-  CATCH (except, RETURN_MASK_ALL)
+  catch (const gdb_exception &except)
     {
       xfree (cmd_name);
       xfree (docstring);
@@ -581,7 +580,6 @@ cmdpy_init (PyObject *self, PyObject *args, PyObject *kw)
       gdbpy_convert_exception (except);
       return -1;
     }
-  END_CATCH
 
   return 0;
 }

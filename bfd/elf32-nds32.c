@@ -5636,7 +5636,7 @@ nds32_elf_relocate_section (bfd *		   output_bfd ATTRIBUTE_UNUSED,
 		      if (h->dynindx == -1)
 			{
 			  _bfd_error_handler
-			    (_("%pB: relocation %s against `%s' can not be used when"
+			    (_("%pB: relocation %s against `%s' can not be used when "
 			       "making a shared object; recompile with -fPIC"),
 			     input_bfd, nds32_elf_howto_table[r_type].name, h->root.root.string);
 			  bfd_set_error (bfd_error_bad_value);
@@ -6672,9 +6672,8 @@ nds32_elf_object_p (bfd *abfd)
 
 /* Store the machine number in the flags field.  */
 
-static void
-nds32_elf_final_write_processing (bfd *abfd,
-				  bfd_boolean linker ATTRIBUTE_UNUSED)
+static bfd_boolean
+nds32_elf_final_write_processing (bfd *abfd)
 {
   unsigned long val;
   static unsigned int cur_mach = 0;
@@ -6711,6 +6710,7 @@ nds32_elf_final_write_processing (bfd *abfd,
 
   elf_elfheader (abfd)->e_flags &= ~EF_NDS_ARCH;
   elf_elfheader (abfd)->e_flags |= val;
+  return _bfd_elf_final_write_processing (abfd);
 }
 
 /* Function to keep NDS32 specific file flags.  */

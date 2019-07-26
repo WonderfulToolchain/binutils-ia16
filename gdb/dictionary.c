@@ -28,6 +28,7 @@
 #include "dictionary.h"
 #include "safe-ctype.h"
 #include <unordered_map>
+#include "language.h"
 
 /* This file implements dictionaries, which are tables that associate
    symbols to names.  They are represented by an opaque type 'struct
@@ -932,7 +933,7 @@ collate_pending_symbols_by_language (const struct pending *symbol_list)
 {
   std::unordered_map<enum language, std::vector<symbol *>> nsyms;
 
-  for (const struct pending *list_counter = symbol_list;
+  for (const pending *list_counter = symbol_list;
        list_counter != nullptr; list_counter = list_counter->next)
     {
       for (int i = list_counter->nsyms - 1; i >= 0; --i)

@@ -1601,10 +1601,7 @@ ppc_linux_core_read_description (struct gdbarch *gdbarch,
   if (vsx)
     features.vsx = true;
 
-  CORE_ADDR hwcap;
-
-  if (target_auxv_search (target, AT_HWCAP, &hwcap) != 1)
-    hwcap = 0;
+  CORE_ADDR hwcap = linux_get_hwcap (target);
 
   features.isa205 = ppc_linux_has_isa205 (hwcap);
 
@@ -1789,7 +1786,7 @@ static void
 ppc_linux_spe_context_inferior_created (struct target_ops *t, int from_tty)
 {
   ppc_linux_spe_context_lookup (NULL);
-  for (objfile *objfile : all_objfiles (current_program_space))
+  for (objfile *objfile : current_program_space->objfiles ())
     ppc_linux_spe_context_lookup (objfile);
 }
 
@@ -1830,7 +1827,7 @@ ppc_linux_spe_context (int wordsize, enum bfd_endian byte_order,
     {
       struct target_ops *target = current_top_target ();
 
-      TRY
+      try
 	{
 	  /* We do not call target_translate_tls_address here, because
 	     svr4_fetch_objfile_link_map may invalidate the frame chain,
@@ -1845,11 +1842,10 @@ ppc_linux_spe_context (int wordsize, enum bfd_endian byte_order,
 	  spe_context_cache_ptid = inferior_ptid;
 	}
 
-      CATCH (ex, RETURN_MASK_ERROR)
+      catch (const gdb_exception_error &ex)
 	{
 	  return 0;
 	}
-      END_CATCH
     }
 
   /* Read variable value.  */

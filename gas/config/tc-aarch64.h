@@ -130,6 +130,12 @@ void aarch64_copy_symbol_attributes (symbolS *, symbolS *);
   (aarch64_copy_symbol_attributes (DEST, SRC))
 #endif
 
+#ifdef OBJ_ELF
+void aarch64_elf_copy_symbol_attributes (symbolS *, symbolS *);
+#define OBJ_COPY_SYMBOL_ATTRIBUTES(DEST, SRC) \
+  aarch64_elf_copy_symbol_attributes (DEST, SRC)
+#endif
+
 #define TC_START_LABEL(STR, NUL_CHAR, NEXT_CHAR)			\
   (NEXT_CHAR == ':' || (NEXT_CHAR == '/' && aarch64_data_in_code ()))
 #define tc_canonicalize_symbol_name(str) aarch64_canonicalize_symbol_name (str);
@@ -173,8 +179,7 @@ struct aarch64_frag_type
 };
 
 #define TC_FRAG_TYPE		struct aarch64_frag_type
-/* NOTE: max_chars is a local variable from frag_var / frag_variant.  */
-#define TC_FRAG_INIT(fragp)	aarch64_init_frag (fragp, max_chars)
+#define TC_FRAG_INIT(fragp, max_bytes) aarch64_init_frag (fragp, max_bytes)
 #define HANDLE_ALIGN(fragp)	aarch64_handle_align (fragp)
 
 #define md_do_align(N, FILL, LEN, MAX, LABEL)					\

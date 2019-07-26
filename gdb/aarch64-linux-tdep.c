@@ -627,6 +627,26 @@ aarch64_linux_iterate_over_regset_sections (struct gdbarch *gdbarch,
   else
     cb (".reg2", AARCH64_LINUX_SIZEOF_FPREGSET, AARCH64_LINUX_SIZEOF_FPREGSET,
 	&aarch64_linux_fpregset, NULL, cb_data);
+
+
+  if (tdep->has_pauth ())
+    {
+      /* Create this on the fly in order to handle the variable location.  */
+      const struct regcache_map_entry pauth_regmap[] =
+	{
+	  { 2, AARCH64_PAUTH_DMASK_REGNUM (tdep->pauth_reg_base), 8},
+	  { 0 }
+	};
+
+      const struct regset aarch64_linux_pauth_regset =
+	{
+	  pauth_regmap, regcache_supply_regset, regcache_collect_regset
+	};
+
+      cb (".reg-aarch-pauth", AARCH64_LINUX_SIZEOF_PAUTH,
+	  AARCH64_LINUX_SIZEOF_PAUTH, &aarch64_linux_pauth_regset,
+	  "pauth registers", cb_data);
+    }
 }
 
 /* Implement the "core_read_description" gdbarch method.  */
@@ -635,12 +655,10 @@ static const struct target_desc *
 aarch64_linux_core_read_description (struct gdbarch *gdbarch,
 				     struct target_ops *target, bfd *abfd)
 {
-  CORE_ADDR aarch64_hwcap = 0;
+  CORE_ADDR hwcap = linux_get_hwcap (target);
 
-  if (target_auxv_search (target, AT_HWCAP, &aarch64_hwcap) != 1)
-    return NULL;
-
-  return aarch64_read_description (aarch64_linux_core_read_vq (gdbarch, abfd));
+  return aarch64_read_description (aarch64_linux_core_read_vq (gdbarch, abfd),
+				   hwcap & AARCH64_HWCAP_PACA);
 }
 
 /* Implementation of `gdbarch_stap_is_single_operand', as defined in
@@ -755,28 +773,6 @@ aarch64_stap_parse_special_token (struct gdbarch *gdbarch,
     return 0;
 
   return 1;
-}
-
-/* Implement the "get_syscall_number" gdbarch method.  */
-
-static LONGEST
-aarch64_linux_get_syscall_number (struct gdbarch *gdbarch,
-				  thread_info *thread)
-{
-  struct regcache *regs = get_thread_regcache (thread);
-  enum bfd_endian byte_order = gdbarch_byte_order (gdbarch);
-
-  /* The content of register x8.  */
-  gdb_byte buf[X_REGISTER_SIZE];
-  /* The result.  */
-  LONGEST ret;
-
-  /* Getting the system call number from the register x8.  */
-  regs->cooked_read (AARCH64_DWARF_X0 + 8, buf);
-
-  ret = extract_signed_integer (buf, X_REGISTER_SIZE, byte_order);
-
-  return ret;
 }
 
 /* AArch64 process record-replay constructs: syscall, signal etc.  */
@@ -1334,6 +1330,40 @@ aarch64_canonicalize_syscall (enum aarch64_syscall syscall_number)
   }
 }
 
+/* Retrieve the syscall number at a ptrace syscall-stop, either on syscall entry
+   or exit.  Return -1 upon error.  */
+
+static LONGEST
+aarch64_linux_get_syscall_number (struct gdbarch *gdbarch, thread_info *thread)
+{
+  struct regcache *regs = get_thread_regcache (thread);
+  LONGEST ret;
+
+  /* Get the system call number from register x8.  */
+  regs->cooked_read (AARCH64_X0_REGNUM + 8, &ret);
+
+  /* On exit from a successful execve, we will be in a new process and all the
+     registers will be cleared - x0 to x30 will be 0, except for a 1 in x7.
+     This function will only ever get called when stopped at the entry or exit
+     of a syscall, so by checking for 0 in x0 (arg0/retval), x1 (arg1), x8
+     (syscall), x29 (FP) and x30 (LR) we can infer:
+     1) Either inferior is at exit from sucessful execve.
+     2) Or inferior is at entry to a call to io_setup with invalid arguments and
+	a corrupted FP and LR.
+     It should be safe enough to assume case 1.  */
+  if (ret == 0)
+    {
+      LONGEST x1 = -1, fp = -1, lr = -1;
+      regs->cooked_read (AARCH64_X0_REGNUM + 1, &x1);
+      regs->cooked_read (AARCH64_FP_REGNUM, &fp);
+      regs->cooked_read (AARCH64_LR_REGNUM, &lr);
+      if (x1 == 0 && fp ==0 && lr == 0)
+	return aarch64_sys_execve;
+    }
+
+  return ret;
+}
+
 /* Record all registers but PC register for process-record.  */
 
 static int
@@ -1628,7 +1658,7 @@ aarch64_linux_init_abi (struct gdbarch_info info, struct gdbarch *gdbarch)
   set_gdbarch_get_syscall_number (gdbarch, aarch64_linux_get_syscall_number);
 
   /* Displaced stepping.  */
-  set_gdbarch_max_insn_length (gdbarch, 4 * DISPLACED_MODIFIED_INSNS);
+  set_gdbarch_max_insn_length (gdbarch, 4 * AARCH64_DISPLACED_MODIFIED_INSNS);
   set_gdbarch_displaced_step_copy_insn (gdbarch,
 					aarch64_displaced_step_copy_insn);
   set_gdbarch_displaced_step_fixup (gdbarch, aarch64_displaced_step_fixup);

@@ -757,7 +757,6 @@ MAKEINFO_EXTRA_FLAGS
 MAKEINFOFLAGS
 MAKEINFO
 PACKAGE
-GNULIB_STDINT_H
 CATOBJEXT
 GENCAT
 INSTOBJEXT
@@ -879,6 +878,7 @@ with_mpfr
 with_libmpfr_prefix
 with_python
 with_guile
+enable_source_highlight
 enable_libmcheck
 with_intel_pt
 with_libipt_prefix
@@ -1554,6 +1554,8 @@ Optional Features:
   --enable-profiling      enable profiling of GDB
   --enable-codesign=CERT  sign gdb with 'codesign -s CERT'
   --disable-rpath         do not hardcode runtime library paths
+  --enable-source-highlight
+                          enable source-highlight for source listings
   --enable-libmcheck      Try linking with -lmcheck if available
   --enable-werror         treat compile warnings as errors
   --enable-build-warnings enable build-time compiler warnings if gcc is used
@@ -6191,119 +6193,6 @@ else CCDEPMODE=depmode=$am_cv_CC_dependencies_compiler_type
 fi
 
 
-gnulib_extra_configure_args=
-# If large-file support is disabled, make sure gnulib does the same.
-if test "$enable_largefile" = no; then
-gnulib_extra_configure_args="$gnulib_extra_configure_args --disable-largefile"
-fi
-
-# Configure gnulib.  We need to build gnulib under some other
-# directory not "gnulib", to avoid the problem of both GDB and
-# GDBserver wanting to build it in the same directory, when building
-# in the source dir.
-
-  in_src="gnulib"
-  in_build="build-gnulib"
-  in_extra_args="$gnulib_extra_configure_args"
-
-  # Remove --cache-file, --srcdir, and --disable-option-checking arguments
-  # so they do not pile up.
-  ac_sub_configure_args=
-  ac_prev=
-  eval "set x $ac_configure_args"
-  shift
-  for ac_arg
-  do
-    if test -n "$ac_prev"; then
-      ac_prev=
-      continue
-    fi
-    case $ac_arg in
-    -cache-file | --cache-file | --cache-fil | --cache-fi \
-    | --cache-f | --cache- | --cache | --cach | --cac | --ca | --c)
-      ac_prev=cache_file ;;
-    -cache-file=* | --cache-file=* | --cache-fil=* | --cache-fi=* \
-    | --cache-f=* | --cache-=* | --cache=* | --cach=* | --cac=* | --ca=* \
-    | --c=*)
-      ;;
-    --config-cache | -C)
-      ;;
-    -srcdir | --srcdir | --srcdi | --srcd | --src | --sr)
-      ac_prev=srcdir ;;
-    -srcdir=* | --srcdir=* | --srcdi=* | --srcd=* | --src=* | --sr=*)
-      ;;
-    -prefix | --prefix | --prefi | --pref | --pre | --pr | --p)
-      ac_prev=prefix ;;
-    -prefix=* | --prefix=* | --prefi=* | --pref=* | --pre=* | --pr=* | --p=*)
-      ;;
-    --disable-option-checking)
-      ;;
-    *)
-      case $ac_arg in
-      *\'*) ac_arg=`$as_echo "$ac_arg" | sed "s/'/'\\\\\\\\''/g"` ;;
-      esac
-      as_fn_append ac_sub_configure_args " '$ac_arg'" ;;
-    esac
-  done
-
-  # Always prepend --prefix to ensure using the same prefix
-  # in subdir configurations.
-  ac_arg="--prefix=$prefix"
-  case $ac_arg in
-  *\'*) ac_arg=`$as_echo "$ac_arg" | sed "s/'/'\\\\\\\\''/g"` ;;
-  esac
-  ac_sub_configure_args="'$ac_arg' $ac_sub_configure_args"
-
-  # Pass --silent
-  if test "$silent" = yes; then
-    ac_sub_configure_args="--silent $ac_sub_configure_args"
-  fi
-
-  # Always prepend --disable-option-checking to silence warnings, since
-  # different subdirs can have different --enable and --with options.
-  ac_sub_configure_args="--disable-option-checking $ac_sub_configure_args"
-
-  ac_popdir=`pwd`
-  ac_dir=$in_build
-
-  ac_msg="=== configuring in $ac_dir (`pwd`/$ac_dir)"
-  $as_echo "$as_me:${as_lineno-$LINENO}: $ac_msg" >&5
-  $as_echo "$ac_msg" >&6
-  as_dir="$ac_dir"; as_fn_mkdir_p
-
-  case $srcdir in
-  [\\/]* | ?:[\\/]* )
-    ac_srcdir=$srcdir/$in_src ;;
-  *) # Relative name.
-    ac_srcdir=../$srcdir/$in_src ;;
-  esac
-
-  cd "$ac_dir"
-
-  ac_sub_configure=$ac_srcdir/configure
-
-  # Make the cache file name correct relative to the subdirectory.
-  case $cache_file in
-  [\\/]* | ?:[\\/]* ) ac_sub_cache_file=$cache_file ;;
-  *) # Relative name.
-    ac_sub_cache_file=$ac_top_build_prefix$cache_file ;;
-  esac
-
-  if test -n "$in_extra_args"; then
-    # Add the extra args at the end.
-    ac_sub_configure_args="$ac_sub_configure_args $in_extra_args"
-  fi
-
-  { $as_echo "$as_me:${as_lineno-$LINENO}: running $SHELL $ac_sub_configure $ac_sub_configure_args --cache-file=$ac_sub_cache_file --srcdir=$ac_srcdir" >&5
-$as_echo "$as_me: running $SHELL $ac_sub_configure $ac_sub_configure_args --cache-file=$ac_sub_cache_file --srcdir=$ac_srcdir" >&6;}
-  # The eval makes quoting arguments work.
-  eval "\$SHELL \"\$ac_sub_configure\" $ac_sub_configure_args \
-       --cache-file=\"\$ac_sub_cache_file\" --srcdir=\"\$ac_srcdir\"" ||
-    as_fn_error $? "$ac_sub_configure failed for $ac_dir" "$LINENO" 5
-
-  cd "$ac_popdir"
-
-
 
 CONFIG_OBS=
 CONFIG_DEPS=
@@ -6395,15 +6284,6 @@ if test x"$USE_NLS" = xyes; then
    CONFIG_INSTALL="$CONFIG_INSTALL install-po"
    CONFIG_UNINSTALL="$CONFIG_UNINSTALL uninstall-po"
 fi
-
-GNULIB=build-gnulib/import
-
-# For Makefile dependencies.
-GNULIB_STDINT_H=
-if test x"$STDINT_H" != x; then
-  GNULIB_STDINT_H=$GNULIB/$STDINT_H
-fi
-
 
 PACKAGE=gdb
 
@@ -6665,7 +6545,7 @@ fi
 . $srcdir/configure.host
 
 # Add in the common host objects.
-. $srcdir/common/common.host
+. $srcdir/gdbsupport/common.host
 gdb_host_obs="$gdb_host_obs $common_host_obs"
 
 # Accumulate some settings from configure.tgt over all enabled targets
@@ -10657,82 +10537,6 @@ rm -f core conftest.err conftest.$ac_objext \
 $as_echo "${found_usable_python}" >&6; }
 
     fi
-    if test ${have_libpython} = no; then
-
-  version=python2.5
-
-  new_CPPFLAGS=${python_includes}
-  new_LIBS="-lpython2.5 ${python_libs}"
-  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for ${version}" >&5
-$as_echo_n "checking for ${version}... " >&6; }
-  save_CPPFLAGS=$CPPFLAGS
-  save_LIBS=$LIBS
-  CPPFLAGS="$CPPFLAGS $new_CPPFLAGS"
-  LIBS="$new_LIBS $LIBS"
-  found_usable_python=no
-  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-#include "Python.h"
-int
-main ()
-{
-Py_Initialize ();
-  ;
-  return 0;
-}
-_ACEOF
-if ac_fn_c_try_link "$LINENO"; then :
-  have_libpython=${version}
-                  found_usable_python=yes
-                  PYTHON_CPPFLAGS=$new_CPPFLAGS
-                  PYTHON_LIBS=$new_LIBS
-fi
-rm -f core conftest.err conftest.$ac_objext \
-    conftest$ac_exeext conftest.$ac_ext
-  CPPFLAGS=$save_CPPFLAGS
-  LIBS=$save_LIBS
-  { $as_echo "$as_me:${as_lineno-$LINENO}: result: ${found_usable_python}" >&5
-$as_echo "${found_usable_python}" >&6; }
-
-    fi
-    if test ${have_libpython} = no; then
-
-  version=python2.4
-
-  new_CPPFLAGS=${python_includes}
-  new_LIBS="-lpython2.4 ${python_libs}"
-  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for ${version}" >&5
-$as_echo_n "checking for ${version}... " >&6; }
-  save_CPPFLAGS=$CPPFLAGS
-  save_LIBS=$LIBS
-  CPPFLAGS="$CPPFLAGS $new_CPPFLAGS"
-  LIBS="$new_LIBS $LIBS"
-  found_usable_python=no
-  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-#include "Python.h"
-int
-main ()
-{
-Py_Initialize ();
-  ;
-  return 0;
-}
-_ACEOF
-if ac_fn_c_try_link "$LINENO"; then :
-  have_libpython=${version}
-                  found_usable_python=yes
-                  PYTHON_CPPFLAGS=$new_CPPFLAGS
-                  PYTHON_LIBS=$new_LIBS
-fi
-rm -f core conftest.err conftest.$ac_objext \
-    conftest$ac_exeext conftest.$ac_ext
-  CPPFLAGS=$save_CPPFLAGS
-  LIBS=$save_LIBS
-  { $as_echo "$as_me:${as_lineno-$LINENO}: result: ${found_usable_python}" >&5
-$as_echo "${found_usable_python}" >&6; }
-
-    fi
   fi
   if test "${have_libpython}" = python2.7 -o "${have_libpython}" = python27; then
 
@@ -10741,14 +10545,6 @@ $as_echo "#define HAVE_LIBPYTHON2_7 1" >>confdefs.h
   elif test "${have_libpython}" = python2.6 -o "${have_libpython}" = python26; then
 
 $as_echo "#define HAVE_LIBPYTHON2_6 1" >>confdefs.h
-
-  elif test "${have_libpython}" = python2.5 -o "${have_libpython}" = python25; then
-
-$as_echo "#define HAVE_LIBPYTHON2_5 1" >>confdefs.h
-
-  elif test "${have_libpython}" = python2.4 -o "${have_libpython}" = python24; then
-
-$as_echo "#define HAVE_LIBPYTHON2_4 1" >>confdefs.h
 
   fi
 
@@ -11477,13 +11273,30 @@ fi
 
 SRCHIGH_LIBS=
 SRCHIGH_CFLAGS=
-{ $as_echo "$as_me:${as_lineno-$LINENO}: checking for source highlight" >&5
-$as_echo_n "checking for source highlight... " >&6; }
-if test "${pkg_config_prog_path}" = "missing"; then
-   { $as_echo "$as_me:${as_lineno-$LINENO}: result: no - pkg-config not found" >&5
-$as_echo "no - pkg-config not found" >&6; }
+
+# Check whether --enable-source-highlight was given.
+if test "${enable_source_highlight+set}" = set; then :
+  enableval=$enable_source_highlight; case "${enableval}" in
+  yes)  enable_source_highlight=yes ;;
+  no)   enable_source_highlight=no  ;;
+  *)    as_fn_error $? "bad value ${enableval} for source-highlight option" "$LINENO" 5 ;;
+esac
 else
-   if ${pkg_config_prog_path} --exists source-highlight; then
+  enable_source_highlight=auto
+fi
+
+
+if test "${enable_source_highlight}" != "no"; then
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for the source-highlight library" >&5
+$as_echo_n "checking for the source-highlight library... " >&6; }
+  if test "${pkg_config_prog_path}" = "missing"; then
+    { $as_echo "$as_me:${as_lineno-$LINENO}: result: no - pkg-config not found" >&5
+$as_echo "no - pkg-config not found" >&6; }
+    if test "${enable_source_highlight}" = "yes"; then
+      as_fn_error $? "pkg-config was not found in your system" "$LINENO" 5
+    fi
+  else
+    if ${pkg_config_prog_path} --exists source-highlight; then
       SRCHIGH_CFLAGS=`${pkg_config_prog_path} --cflags source-highlight`
       SRCHIGH_LIBS=`${pkg_config_prog_path} --libs source-highlight`
 
@@ -11491,10 +11304,14 @@ $as_echo "#define HAVE_SOURCE_HIGHLIGHT 1" >>confdefs.h
 
       { $as_echo "$as_me:${as_lineno-$LINENO}: result: yes" >&5
 $as_echo "yes" >&6; }
-   else
+    else
       { $as_echo "$as_me:${as_lineno-$LINENO}: result: no" >&5
 $as_echo "no" >&6; }
-   fi
+      if test "${enable_source_highlight}" = "yes"; then
+        as_fn_error $? "source-highlight was not found in your system" "$LINENO" 5
+      fi
+    fi
+  fi
 fi
 
 
@@ -15496,7 +15313,10 @@ build_warnings="-Wall -Wpointer-arith \
 -Wsuggest-override \
 -Wimplicit-fallthrough=3 \
 -Wduplicated-cond \
--Wshadow=local"
+-Wshadow=local \
+-Wdeprecated-copy \
+-Wdeprecated-copy-dtor \
+-Wredundant-move"
 
 case "${host}" in
   *-*-mingw32*)
@@ -17895,8 +17715,8 @@ if $enable_unittests; then
 $as_echo "#define GDB_SELF_TEST 1" >>confdefs.h
 
 
-  CONFIG_OBS="$CONFIG_OBS \$(SUBDIR_UNITTESTS_OBS) common/selftest.o selftest-arch.o"
-  CONFIG_SRCS="$CONFIG_SRCS \$(SUBDIR_UNITTESTS_SRCS) common/selftest.c selftest-arch.c"
+  CONFIG_OBS="$CONFIG_OBS \$(SUBDIR_UNITTESTS_OBS) gdbsupport/selftest.o selftest-arch.o"
+  CONFIG_SRCS="$CONFIG_SRCS \$(SUBDIR_UNITTESTS_SRCS) gdbsupport/selftest.c selftest-arch.c"
 
 fi
 

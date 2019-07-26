@@ -31,14 +31,14 @@
 #include "regcache.h"
 #include "inf-child.h"
 #include "nat/fork-inferior.h"
-#include "filestuff.h"
+#include "gdbarch.h"
 
 #define _STRUCTURED_PROC 1	/* Should be done by configure script.  */
 
 #include <sys/procfs.h>
 #include <sys/fault.h>
 #include <sys/syscall.h>
-#include "gdb_wait.h"
+#include "gdbsupport/gdb_wait.h"
 #include <signal.h>
 #include <ctype.h>
 #include "gdb_bfd.h"
@@ -46,8 +46,8 @@
 #include "auxv.h"
 #include "procfs.h"
 #include "observable.h"
-#include "common/scoped_fd.h"
-#include "common/pathstuff.h"
+#include "gdbsupport/scoped_fd.h"
+#include "gdbsupport/pathstuff.h"
 
 /* This module provides the interface between GDB and the
    /proc file system, which is used on many versions of Unix
@@ -119,7 +119,7 @@ public:
 					ULONGEST offset, ULONGEST len,
 					ULONGEST *xfered_len) override;
 
-  void pass_signals (int, unsigned char *) override;
+  void pass_signals (gdb::array_view<const unsigned char>) override;
 
   void files_info () override;
 
@@ -127,7 +127,7 @@ public:
 
   bool thread_alive (ptid_t ptid) override;
 
-  const char *pid_to_str (ptid_t) override;
+  std::string pid_to_str (ptid_t) override;
 
   char *pid_to_exec_file (int pid) override;
 
@@ -909,7 +909,12 @@ proc_wait_for_stop (procinfo *pi)
 
   procfs_ctl_t cmd = PCWSTOP;
 
+  set_sigint_trap ();
+
   win = (write (pi->ctl_fd, (char *) &cmd, sizeof (cmd)) == sizeof (cmd));
+
+  clear_sigint_trap ();
+
   /* We been runnin' and we stopped -- need to update status.  */
   pi->status_valid = 0;
 
@@ -1879,10 +1884,10 @@ procfs_target::attach (const char *args, int from_tty)
 
       if (exec_file)
 	printf_filtered (_("Attaching to program `%s', %s\n"),
-			 exec_file, target_pid_to_str (ptid_t (pid)));
+			 exec_file, target_pid_to_str (ptid_t (pid)).c_str ());
       else
 	printf_filtered (_("Attaching to %s\n"),
-			 target_pid_to_str (ptid_t (pid)));
+			 target_pid_to_str (ptid_t (pid)).c_str ());
 
       fflush (stdout);
     }
@@ -1905,8 +1910,7 @@ procfs_target::detach (inferior *inf, int from_tty)
 	exec_file = "";
 
       printf_filtered (_("Detaching from program: %s, %s\n"), exec_file,
-		       target_pid_to_str (ptid_t (pid)));
-      gdb_flush (gdb_stdout);
+		       target_pid_to_str (ptid_t (pid)).c_str ());
     }
 
   do_detach ();
@@ -2059,7 +2063,7 @@ procfs_target::fetch_registers (struct regcache *regcache, int regnum)
 
   if (pi == NULL)
     error (_("procfs: fetch_registers failed to find procinfo for %s"),
-	   target_pid_to_str (ptid));
+	   target_pid_to_str (ptid).c_str ());
 
   gregs = proc_get_gregs (pi);
   if (gregs == NULL)
@@ -2108,7 +2112,7 @@ procfs_target::store_registers (struct regcache *regcache, int regnum)
 
   if (pi == NULL)
     error (_("procfs: store_registers: failed to find procinfo for %s"),
-	   target_pid_to_str (ptid));
+	   target_pid_to_str (ptid).c_str ());
 
   gregs = proc_get_gregs (pi);
   if (gregs == NULL)
@@ -2281,7 +2285,7 @@ wait_again:
 		  {
 		    if (print_thread_events)
 		      printf_unfiltered (_("[%s exited]\n"),
-					 target_pid_to_str (retval));
+					 target_pid_to_str (retval).c_str ());
 		    delete_thread (find_thread_ptid (retval));
 		    status->kind = TARGET_WAITKIND_SPURIOUS;
 		    return retval;
@@ -2402,7 +2406,7 @@ wait_again:
 		  {
 		    if (print_thread_events)
 		      printf_unfiltered (_("[%s exited]\n"),
-					 target_pid_to_str (retval));
+					 target_pid_to_str (retval).c_str ());
 		    delete_thread (find_thread_ptid (retval));
 		    status->kind = TARGET_WAITKIND_SPURIOUS;
 		    return retval;
@@ -2772,7 +2776,7 @@ procfs_target::resume (ptid_t ptid, int step, enum gdb_signal signo)
 /* Set up to trace signals in the child process.  */
 
 void
-procfs_target::pass_signals (int numsigs, unsigned char *pass_signals)
+procfs_target::pass_signals (gdb::array_view<const unsigned char> pass_signals)
 {
   sigset_t signals;
   procinfo *pi = find_procinfo_or_die (inferior_ptid.pid (), 0);
@@ -2783,7 +2787,7 @@ procfs_target::pass_signals (int numsigs, unsigned char *pass_signals)
   for (signo = 0; signo < NSIG; signo++)
     {
       int target_signo = gdb_signal_from_host (signo);
-      if (target_signo < numsigs && pass_signals[target_signo])
+      if (target_signo < pass_signals.size () && pass_signals[target_signo])
 	prdelset (&signals, signo);
     }
 
@@ -2800,7 +2804,7 @@ procfs_target::files_info ()
 
   printf_filtered (_("\tUsing the running image of %s %s via /proc.\n"),
 		   inf->attach_flag? "attached": "child",
-		   target_pid_to_str (inferior_ptid));
+		   target_pid_to_str (inferior_ptid).c_str ());
 }
 
 /* Make it die.  Wait for it to die.  Clean up after it.  Note: this
@@ -3185,20 +3189,15 @@ procfs_target::thread_alive (ptid_t ptid)
   return true;
 }
 
-/* Convert PTID to a string.  Returns the string in a static
-   buffer.  */
+/* Convert PTID to a string.  */
 
-const char *
+std::string
 procfs_target::pid_to_str (ptid_t ptid)
 {
-  static char buf[80];
-
   if (ptid.lwp () == 0)
-    xsnprintf (buf, sizeof (buf), "process %d", ptid.pid ());
+    return string_printf ("process %d", ptid.pid ());
   else
-    xsnprintf (buf, sizeof (buf), "LWP %ld", ptid.lwp ());
-
-  return buf;
+    return string_printf ("LWP %ld", ptid.lwp ());
 }
 
 /* Accepts an integer PID; Returns a string representing a file that

@@ -44,15 +44,16 @@ struct thread_info;
 #include "frame.h"
 
 /* For gdb_environ.  */
-#include "environ.h"
+#include "gdbsupport/environ.h"
 
 #include "progspace.h"
 #include "registry.h"
 
 #include "symfile-add-flags.h"
-#include "common/refcounted-object.h"
+#include "gdbsupport/refcounted-object.h"
+#include "gdbsupport/forward-scope-exit.h"
 
-#include "common-inferior.h"
+#include "gdbsupport/common-inferior.h"
 #include "gdbthread.h"
 
 struct infcall_suspend_state;
@@ -67,7 +68,18 @@ struct infcall_suspend_state_deleter
 {
   void operator() (struct infcall_suspend_state *state) const
   {
-    restore_infcall_suspend_state (state);
+    try
+      {
+	restore_infcall_suspend_state (state);
+      }
+    catch (const gdb_exception_error &e)
+      {
+	/* If we are restoring the inferior state due to an exception,
+	   some error message will be printed.  So, only warn the user
+	   when we cannot restore during normal execution.  */
+	if (!std::uncaught_exception ())
+	  warning (_("Failed to restore inferior state: %s"), e.what ());
+      }
   }
 };
 
@@ -198,7 +210,8 @@ extern void continue_1 (int all_threads);
 
 extern void interrupt_target_1 (int all_threads);
 
-extern void delete_longjmp_breakpoint_cleanup (void *arg);
+using delete_longjmp_breakpoint_cleanup
+  = FORWARD_SCOPE_EXIT (delete_longjmp_breakpoint);
 
 extern void detach_command (const char *, int);
 
@@ -333,7 +346,7 @@ extern void set_current_inferior (inferior *);
    the inferior object's refcount, to prevent something deleting the
    inferior object before reverting back (e.g., due to a
    "remove-inferiors" command (see
-   make_cleanup_restore_current_thread).  All other inferior
+   scoped_restore_current_inferior).  All other inferior
    references are considered weak references.  Inferiors are always
    listed exactly once in the inferior list, so placing an inferior in
    the inferior list is an implicit, not counted strong reference.  */

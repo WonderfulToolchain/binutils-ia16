@@ -142,7 +142,6 @@ static void s7_do_lw_pic (char *);
 #define s7_GET_INSN_SIZE(type) ((s7_GET_INSN_CLASS (type) == INSN_CLASS_16) \
                              ? s7_INSN16_SIZE : s7_INSN_SIZE)
 
-#define s7_MAX_LITTLENUMS 6
 #define s7_INSN_NAME_LEN 16
 
 /* Relax will need some padding for alignment.  */
@@ -6209,7 +6208,7 @@ static const char *
 s7_atof (int type, char *litP, int *sizeP)
 {
   int prec;
-  LITTLENUM_TYPE words[s7_MAX_LITTLENUMS];
+  LITTLENUM_TYPE words[MAX_LITTLENUMS];
   char *t;
   int i;
 
@@ -6562,8 +6561,8 @@ s7_convert_frag (bfd * abfd ATTRIBUTE_UNUSED,
 		 segT sec ATTRIBUTE_UNUSED,
 		 fragS * fragp)
 {
-  int r_old;
-  int r_new;
+  unsigned int r_old;
+  unsigned int r_new;
   char backup[20];
   fixS *fixp;
 

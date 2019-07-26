@@ -23,7 +23,7 @@
 #include "regcache.h"
 
 #include <x86/context.h>
-#include "x86-xstate.h"
+#include "gdbsupport/x86-xstate.h"
 #include "arch/i386.h"
 #include "x86-tdesc.h"
 
@@ -89,7 +89,7 @@ nto_x86_arch_setup (void)
 {
   the_low_target.num_regs = 16;
   struct target_desc *tdesc
-    = i386_create_target_description (X86_XSTATE_SSE_MASK, false);
+    = i386_create_target_description (X86_XSTATE_SSE_MASK, false, false);
 
   init_target_desc (tdesc, i386_expedite_regs);
 

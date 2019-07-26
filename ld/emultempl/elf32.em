@@ -103,7 +103,6 @@ gld${EMULATION_NAME}_before_parse (void)
   input_flags.dynamic = ${DYNAMIC_LINK-TRUE};
   config.has_shared = `if test -n "$GENERATE_SHLIB_SCRIPT" ; then echo TRUE ; else echo FALSE ; fi`;
   config.separate_code = `if test "x${SEPARATE_CODE}" = xyes ; then echo TRUE ; else echo FALSE ; fi`;
-  `if test -n "$CALL_NOP_BYTE" ; then echo link_info.call_nop_byte = $CALL_NOP_BYTE; fi`;
   link_info.check_relocs_after_open_input = TRUE;
   link_info.relro = DEFAULT_LD_Z_RELRO;
   link_info.separate_code = DEFAULT_LD_Z_SEPARATE_CODE;
@@ -2029,10 +2028,13 @@ elf_orphan_compatible (asection *in, asection *out)
   if (elf_section_data (out)->this_hdr.sh_info
       != elf_section_data (in)->this_hdr.sh_info)
     return FALSE;
-  /* We can't merge two sections with differing SHF_EXCLUDE when doing
-     a relocatable link.  */
+  /* We can't merge with member of output section group nor merge two
+     sections with differing SHF_EXCLUDE when doing a relocatable link.
+   */
   if (bfd_link_relocatable (&link_info)
-      && ((elf_section_flags (out) ^ elf_section_flags (in)) & SHF_EXCLUDE) != 0)
+      && (elf_next_in_group (out) != NULL
+	  || ((elf_section_flags (out) ^ elf_section_flags (in))
+	      & SHF_EXCLUDE) != 0))
     return FALSE;
   return _bfd_elf_match_sections_by_type (link_info.output_bfd, out,
 					  in->owner, in);
@@ -2129,6 +2131,7 @@ gld${EMULATION_NAME}_place_orphan (asection *s,
       && elfinput
       && elfoutput
       && (s->flags & SEC_ALLOC) != 0
+      && (elf_tdata (s->owner)->has_gnu_osabi & elf_gnu_osabi_mbind) != 0
       && (elf_section_flags (s) & SHF_GNU_MBIND) != 0)
     {
       /* Find the output mbind section with the same type, attributes
@@ -2166,6 +2169,7 @@ gld${EMULATION_NAME}_place_orphan (asection *s,
 	secname = ".mbind.rodata";
       else
 	secname = ".mbind.text";
+      elf_tdata (link_info.output_bfd)->has_gnu_osabi |= elf_gnu_osabi_mbind;
     }
 
   /* Look through the script to see where to place this section.  The

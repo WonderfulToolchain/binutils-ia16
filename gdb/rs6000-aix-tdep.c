@@ -37,7 +37,7 @@
 #include "solib.h"
 #include "solib-aix.h"
 #include "target-float.h"
-#include "xml-utils.h"
+#include "gdbsupport/xml-utils.h"
 #include "trad-frame.h"
 #include "frame-unwind.h"
 
@@ -670,18 +670,17 @@ rs6000_convert_from_func_ptr_addr (struct gdbarch *gdbarch,
       CORE_ADDR pc = 0;
       struct obj_section *pc_section;
 
-      TRY
+      try
         {
           pc = read_memory_unsigned_integer (addr, tdep->wordsize, byte_order);
         }
-      CATCH (e, RETURN_MASK_ERROR)
+      catch (const gdb_exception_error &e)
         {
           /* An error occured during reading.  Probably a memory error
              due to the section not being loaded yet.  This address
              cannot be a function descriptor.  */
           return addr;
         }
-      END_CATCH
 
       pc_section = find_pc_section (pc);
 

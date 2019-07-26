@@ -32,7 +32,7 @@
 #include "language.h"
 #include "symtab.h"
 
-#include "version.h"
+#include "gdbsupport/version.h"
 
 #include "floatformat.h"
 
@@ -969,13 +969,12 @@ gdbarch_skip_prologue_noexcept (gdbarch *gdbarch, CORE_ADDR pc) noexcept
 {
   CORE_ADDR new_pc = pc;
 
-  TRY
+  try
     {
       new_pc = gdbarch_skip_prologue (gdbarch, pc);
     }
-  CATCH (ex, RETURN_MASK_ALL)
+  catch (const gdb_exception &ex)
     {}
-  END_CATCH
 
   return new_pc;
 }
@@ -993,7 +992,7 @@ default_in_indirect_branch_thunk (gdbarch *gdbarch, CORE_ADDR pc)
 ULONGEST
 default_type_align (struct gdbarch *gdbarch, struct type *type)
 {
-  return type_length_units (check_typedef (type));
+  return 0;
 }
 
 void

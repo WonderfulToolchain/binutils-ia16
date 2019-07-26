@@ -201,390 +201,390 @@ aarch64_find_real_opcode (const aarch64_opcode *opcode)
     case 757:	/* extr */
       value = 757;	/* --> extr.  */
       break;
-    case 990:	/* bic */
-    case 989:	/* and */
-      value = 989;	/* --> and.  */
-      break;
-    case 992:	/* mov */
-    case 991:	/* orr */
-      value = 991;	/* --> orr.  */
-      break;
-    case 995:	/* tst */
-    case 994:	/* ands */
-      value = 994;	/* --> ands.  */
-      break;
-    case 1000:	/* uxtw */
-    case 999:	/* mov */
-    case 998:	/* orr */
-      value = 998;	/* --> orr.  */
-      break;
-    case 1002:	/* mvn */
-    case 1001:	/* orn */
-      value = 1001;	/* --> orn.  */
-      break;
-    case 1006:	/* tst */
-    case 1005:	/* ands */
-      value = 1005;	/* --> ands.  */
-      break;
-    case 1132:	/* staddb */
-    case 1036:	/* ldaddb */
-      value = 1036;	/* --> ldaddb.  */
-      break;
-    case 1133:	/* staddh */
-    case 1037:	/* ldaddh */
-      value = 1037;	/* --> ldaddh.  */
-      break;
-    case 1134:	/* stadd */
-    case 1038:	/* ldadd */
-      value = 1038;	/* --> ldadd.  */
-      break;
-    case 1135:	/* staddlb */
-    case 1040:	/* ldaddlb */
-      value = 1040;	/* --> ldaddlb.  */
-      break;
-    case 1136:	/* staddlh */
-    case 1043:	/* ldaddlh */
-      value = 1043;	/* --> ldaddlh.  */
-      break;
-    case 1137:	/* staddl */
-    case 1046:	/* ldaddl */
-      value = 1046;	/* --> ldaddl.  */
-      break;
-    case 1138:	/* stclrb */
-    case 1048:	/* ldclrb */
-      value = 1048;	/* --> ldclrb.  */
-      break;
-    case 1139:	/* stclrh */
-    case 1049:	/* ldclrh */
-      value = 1049;	/* --> ldclrh.  */
-      break;
-    case 1140:	/* stclr */
-    case 1050:	/* ldclr */
-      value = 1050;	/* --> ldclr.  */
-      break;
-    case 1141:	/* stclrlb */
-    case 1052:	/* ldclrlb */
-      value = 1052;	/* --> ldclrlb.  */
-      break;
-    case 1142:	/* stclrlh */
-    case 1055:	/* ldclrlh */
-      value = 1055;	/* --> ldclrlh.  */
-      break;
-    case 1143:	/* stclrl */
-    case 1058:	/* ldclrl */
-      value = 1058;	/* --> ldclrl.  */
-      break;
-    case 1144:	/* steorb */
-    case 1060:	/* ldeorb */
-      value = 1060;	/* --> ldeorb.  */
-      break;
-    case 1145:	/* steorh */
-    case 1061:	/* ldeorh */
-      value = 1061;	/* --> ldeorh.  */
-      break;
-    case 1146:	/* steor */
-    case 1062:	/* ldeor */
-      value = 1062;	/* --> ldeor.  */
-      break;
-    case 1147:	/* steorlb */
-    case 1064:	/* ldeorlb */
-      value = 1064;	/* --> ldeorlb.  */
-      break;
-    case 1148:	/* steorlh */
-    case 1067:	/* ldeorlh */
-      value = 1067;	/* --> ldeorlh.  */
-      break;
-    case 1149:	/* steorl */
-    case 1070:	/* ldeorl */
-      value = 1070;	/* --> ldeorl.  */
-      break;
-    case 1150:	/* stsetb */
-    case 1072:	/* ldsetb */
-      value = 1072;	/* --> ldsetb.  */
-      break;
-    case 1151:	/* stseth */
-    case 1073:	/* ldseth */
-      value = 1073;	/* --> ldseth.  */
+    case 991:	/* bic */
+    case 990:	/* and */
+      value = 990;	/* --> and.  */
+      break;
+    case 993:	/* mov */
+    case 992:	/* orr */
+      value = 992;	/* --> orr.  */
+      break;
+    case 996:	/* tst */
+    case 995:	/* ands */
+      value = 995;	/* --> ands.  */
+      break;
+    case 1001:	/* uxtw */
+    case 1000:	/* mov */
+    case 999:	/* orr */
+      value = 999;	/* --> orr.  */
+      break;
+    case 1003:	/* mvn */
+    case 1002:	/* orn */
+      value = 1002;	/* --> orn.  */
+      break;
+    case 1007:	/* tst */
+    case 1006:	/* ands */
+      value = 1006;	/* --> ands.  */
+      break;
+    case 1133:	/* staddb */
+    case 1037:	/* ldaddb */
+      value = 1037;	/* --> ldaddb.  */
+      break;
+    case 1134:	/* staddh */
+    case 1038:	/* ldaddh */
+      value = 1038;	/* --> ldaddh.  */
+      break;
+    case 1135:	/* stadd */
+    case 1039:	/* ldadd */
+      value = 1039;	/* --> ldadd.  */
+      break;
+    case 1136:	/* staddlb */
+    case 1041:	/* ldaddlb */
+      value = 1041;	/* --> ldaddlb.  */
+      break;
+    case 1137:	/* staddlh */
+    case 1044:	/* ldaddlh */
+      value = 1044;	/* --> ldaddlh.  */
+      break;
+    case 1138:	/* staddl */
+    case 1047:	/* ldaddl */
+      value = 1047;	/* --> ldaddl.  */
+      break;
+    case 1139:	/* stclrb */
+    case 1049:	/* ldclrb */
+      value = 1049;	/* --> ldclrb.  */
+      break;
+    case 1140:	/* stclrh */
+    case 1050:	/* ldclrh */
+      value = 1050;	/* --> ldclrh.  */
+      break;
+    case 1141:	/* stclr */
+    case 1051:	/* ldclr */
+      value = 1051;	/* --> ldclr.  */
+      break;
+    case 1142:	/* stclrlb */
+    case 1053:	/* ldclrlb */
+      value = 1053;	/* --> ldclrlb.  */
+      break;
+    case 1143:	/* stclrlh */
+    case 1056:	/* ldclrlh */
+      value = 1056;	/* --> ldclrlh.  */
+      break;
+    case 1144:	/* stclrl */
+    case 1059:	/* ldclrl */
+      value = 1059;	/* --> ldclrl.  */
+      break;
+    case 1145:	/* steorb */
+    case 1061:	/* ldeorb */
+      value = 1061;	/* --> ldeorb.  */
+      break;
+    case 1146:	/* steorh */
+    case 1062:	/* ldeorh */
+      value = 1062;	/* --> ldeorh.  */
+      break;
+    case 1147:	/* steor */
+    case 1063:	/* ldeor */
+      value = 1063;	/* --> ldeor.  */
+      break;
+    case 1148:	/* steorlb */
+    case 1065:	/* ldeorlb */
+      value = 1065;	/* --> ldeorlb.  */
+      break;
+    case 1149:	/* steorlh */
+    case 1068:	/* ldeorlh */
+      value = 1068;	/* --> ldeorlh.  */
+      break;
+    case 1150:	/* steorl */
+    case 1071:	/* ldeorl */
+      value = 1071;	/* --> ldeorl.  */
+      break;
+    case 1151:	/* stsetb */
+    case 1073:	/* ldsetb */
+      value = 1073;	/* --> ldsetb.  */
+      break;
+    case 1152:	/* stseth */
+    case 1074:	/* ldseth */
+      value = 1074;	/* --> ldseth.  */
       break;
-    case 1152:	/* stset */
-    case 1074:	/* ldset */
-      value = 1074;	/* --> ldset.  */
+    case 1153:	/* stset */
+    case 1075:	/* ldset */
+      value = 1075;	/* --> ldset.  */
       break;
-    case 1153:	/* stsetlb */
-    case 1076:	/* ldsetlb */
-      value = 1076;	/* --> ldsetlb.  */
+    case 1154:	/* stsetlb */
+    case 1077:	/* ldsetlb */
+      value = 1077;	/* --> ldsetlb.  */
       break;
-    case 1154:	/* stsetlh */
-    case 1079:	/* ldsetlh */
-      value = 1079;	/* --> ldsetlh.  */
+    case 1155:	/* stsetlh */
+    case 1080:	/* ldsetlh */
+      value = 1080;	/* --> ldsetlh.  */
       break;
-    case 1155:	/* stsetl */
-    case 1082:	/* ldsetl */
-      value = 1082;	/* --> ldsetl.  */
+    case 1156:	/* stsetl */
+    case 1083:	/* ldsetl */
+      value = 1083;	/* --> ldsetl.  */
       break;
-    case 1156:	/* stsmaxb */
-    case 1084:	/* ldsmaxb */
-      value = 1084;	/* --> ldsmaxb.  */
+    case 1157:	/* stsmaxb */
+    case 1085:	/* ldsmaxb */
+      value = 1085;	/* --> ldsmaxb.  */
       break;
-    case 1157:	/* stsmaxh */
-    case 1085:	/* ldsmaxh */
-      value = 1085;	/* --> ldsmaxh.  */
+    case 1158:	/* stsmaxh */
+    case 1086:	/* ldsmaxh */
+      value = 1086;	/* --> ldsmaxh.  */
       break;
-    case 1158:	/* stsmax */
-    case 1086:	/* ldsmax */
-      value = 1086;	/* --> ldsmax.  */
-      break;
-    case 1159:	/* stsmaxlb */
-    case 1088:	/* ldsmaxlb */
-      value = 1088;	/* --> ldsmaxlb.  */
-      break;
-    case 1160:	/* stsmaxlh */
-    case 1091:	/* ldsmaxlh */
-      value = 1091;	/* --> ldsmaxlh.  */
-      break;
-    case 1161:	/* stsmaxl */
-    case 1094:	/* ldsmaxl */
-      value = 1094;	/* --> ldsmaxl.  */
-      break;
-    case 1162:	/* stsminb */
-    case 1096:	/* ldsminb */
-      value = 1096;	/* --> ldsminb.  */
-      break;
-    case 1163:	/* stsminh */
-    case 1097:	/* ldsminh */
-      value = 1097;	/* --> ldsminh.  */
-      break;
-    case 1164:	/* stsmin */
-    case 1098:	/* ldsmin */
-      value = 1098;	/* --> ldsmin.  */
-      break;
-    case 1165:	/* stsminlb */
-    case 1100:	/* ldsminlb */
-      value = 1100;	/* --> ldsminlb.  */
-      break;
-    case 1166:	/* stsminlh */
-    case 1103:	/* ldsminlh */
-      value = 1103;	/* --> ldsminlh.  */
-      break;
-    case 1167:	/* stsminl */
-    case 1106:	/* ldsminl */
-      value = 1106;	/* --> ldsminl.  */
-      break;
-    case 1168:	/* stumaxb */
-    case 1108:	/* ldumaxb */
-      value = 1108;	/* --> ldumaxb.  */
-      break;
-    case 1169:	/* stumaxh */
-    case 1109:	/* ldumaxh */
-      value = 1109;	/* --> ldumaxh.  */
-      break;
-    case 1170:	/* stumax */
-    case 1110:	/* ldumax */
-      value = 1110;	/* --> ldumax.  */
-      break;
-    case 1171:	/* stumaxlb */
-    case 1112:	/* ldumaxlb */
-      value = 1112;	/* --> ldumaxlb.  */
-      break;
-    case 1172:	/* stumaxlh */
-    case 1115:	/* ldumaxlh */
-      value = 1115;	/* --> ldumaxlh.  */
-      break;
-    case 1173:	/* stumaxl */
-    case 1118:	/* ldumaxl */
-      value = 1118;	/* --> ldumaxl.  */
-      break;
-    case 1174:	/* stuminb */
-    case 1120:	/* lduminb */
-      value = 1120;	/* --> lduminb.  */
-      break;
-    case 1175:	/* stuminh */
-    case 1121:	/* lduminh */
-      value = 1121;	/* --> lduminh.  */
-      break;
-    case 1176:	/* stumin */
-    case 1122:	/* ldumin */
-      value = 1122;	/* --> ldumin.  */
-      break;
-    case 1177:	/* stuminlb */
-    case 1124:	/* lduminlb */
-      value = 1124;	/* --> lduminlb.  */
-      break;
-    case 1178:	/* stuminlh */
-    case 1127:	/* lduminlh */
-      value = 1127;	/* --> lduminlh.  */
-      break;
-    case 1179:	/* stuminl */
-    case 1130:	/* lduminl */
-      value = 1130;	/* --> lduminl.  */
-      break;
-    case 1181:	/* mov */
-    case 1180:	/* movn */
-      value = 1180;	/* --> movn.  */
-      break;
-    case 1183:	/* mov */
-    case 1182:	/* movz */
-      value = 1182;	/* --> movz.  */
-      break;
-    case 1229:	/* autibsp */
-    case 1228:	/* autibz */
-    case 1227:	/* autiasp */
-    case 1226:	/* autiaz */
-    case 1225:	/* pacibsp */
-    case 1224:	/* pacibz */
-    case 1223:	/* paciasp */
-    case 1222:	/* paciaz */
-    case 1203:	/* psb */
-    case 1202:	/* esb */
-    case 1201:	/* autib1716 */
-    case 1200:	/* autia1716 */
-    case 1199:	/* pacib1716 */
-    case 1198:	/* pacia1716 */
-    case 1197:	/* xpaclri */
-    case 1196:	/* sevl */
-    case 1195:	/* sev */
-    case 1194:	/* wfi */
-    case 1193:	/* wfe */
-    case 1192:	/* yield */
-    case 1191:	/* bti */
-    case 1190:	/* csdb */
-    case 1189:	/* nop */
-    case 1188:	/* hint */
-      value = 1188;	/* --> hint.  */
-      break;
-    case 1207:	/* pssbb */
-    case 1206:	/* ssbb */
-    case 1205:	/* dsb */
-      value = 1205;	/* --> dsb.  */
-      break;
-    case 1218:	/* cpp */
-    case 1217:	/* dvp */
-    case 1216:	/* cfp */
-    case 1215:	/* tlbi */
-    case 1214:	/* ic */
-    case 1213:	/* dc */
-    case 1212:	/* at */
-    case 1211:	/* sys */
-      value = 1211;	/* --> sys.  */
-      break;
-    case 2027:	/* bic */
-    case 1277:	/* and */
-      value = 1277;	/* --> and.  */
-      break;
-    case 1260:	/* mov */
-    case 1279:	/* and */
-      value = 1279;	/* --> and.  */
-      break;
-    case 1264:	/* movs */
-    case 1280:	/* ands */
-      value = 1280;	/* --> ands.  */
-      break;
-    case 2028:	/* cmple */
-    case 1315:	/* cmpge */
-      value = 1315;	/* --> cmpge.  */
-      break;
-    case 2031:	/* cmplt */
-    case 1318:	/* cmpgt */
-      value = 1318;	/* --> cmpgt.  */
-      break;
-    case 2029:	/* cmplo */
-    case 1320:	/* cmphi */
-      value = 1320;	/* --> cmphi.  */
-      break;
-    case 2030:	/* cmpls */
-    case 1323:	/* cmphs */
-      value = 1323;	/* --> cmphs.  */
+    case 1159:	/* stsmax */
+    case 1087:	/* ldsmax */
+      value = 1087;	/* --> ldsmax.  */
+      break;
+    case 1160:	/* stsmaxlb */
+    case 1089:	/* ldsmaxlb */
+      value = 1089;	/* --> ldsmaxlb.  */
+      break;
+    case 1161:	/* stsmaxlh */
+    case 1092:	/* ldsmaxlh */
+      value = 1092;	/* --> ldsmaxlh.  */
+      break;
+    case 1162:	/* stsmaxl */
+    case 1095:	/* ldsmaxl */
+      value = 1095;	/* --> ldsmaxl.  */
+      break;
+    case 1163:	/* stsminb */
+    case 1097:	/* ldsminb */
+      value = 1097;	/* --> ldsminb.  */
+      break;
+    case 1164:	/* stsminh */
+    case 1098:	/* ldsminh */
+      value = 1098;	/* --> ldsminh.  */
+      break;
+    case 1165:	/* stsmin */
+    case 1099:	/* ldsmin */
+      value = 1099;	/* --> ldsmin.  */
+      break;
+    case 1166:	/* stsminlb */
+    case 1101:	/* ldsminlb */
+      value = 1101;	/* --> ldsminlb.  */
+      break;
+    case 1167:	/* stsminlh */
+    case 1104:	/* ldsminlh */
+      value = 1104;	/* --> ldsminlh.  */
+      break;
+    case 1168:	/* stsminl */
+    case 1107:	/* ldsminl */
+      value = 1107;	/* --> ldsminl.  */
+      break;
+    case 1169:	/* stumaxb */
+    case 1109:	/* ldumaxb */
+      value = 1109;	/* --> ldumaxb.  */
+      break;
+    case 1170:	/* stumaxh */
+    case 1110:	/* ldumaxh */
+      value = 1110;	/* --> ldumaxh.  */
+      break;
+    case 1171:	/* stumax */
+    case 1111:	/* ldumax */
+      value = 1111;	/* --> ldumax.  */
+      break;
+    case 1172:	/* stumaxlb */
+    case 1113:	/* ldumaxlb */
+      value = 1113;	/* --> ldumaxlb.  */
+      break;
+    case 1173:	/* stumaxlh */
+    case 1116:	/* ldumaxlh */
+      value = 1116;	/* --> ldumaxlh.  */
+      break;
+    case 1174:	/* stumaxl */
+    case 1119:	/* ldumaxl */
+      value = 1119;	/* --> ldumaxl.  */
+      break;
+    case 1175:	/* stuminb */
+    case 1121:	/* lduminb */
+      value = 1121;	/* --> lduminb.  */
+      break;
+    case 1176:	/* stuminh */
+    case 1122:	/* lduminh */
+      value = 1122;	/* --> lduminh.  */
+      break;
+    case 1177:	/* stumin */
+    case 1123:	/* ldumin */
+      value = 1123;	/* --> ldumin.  */
+      break;
+    case 1178:	/* stuminlb */
+    case 1125:	/* lduminlb */
+      value = 1125;	/* --> lduminlb.  */
+      break;
+    case 1179:	/* stuminlh */
+    case 1128:	/* lduminlh */
+      value = 1128;	/* --> lduminlh.  */
+      break;
+    case 1180:	/* stuminl */
+    case 1131:	/* lduminl */
+      value = 1131;	/* --> lduminl.  */
+      break;
+    case 1182:	/* mov */
+    case 1181:	/* movn */
+      value = 1181;	/* --> movn.  */
+      break;
+    case 1184:	/* mov */
+    case 1183:	/* movz */
+      value = 1183;	/* --> movz.  */
+      break;
+    case 1234:	/* autibsp */
+    case 1233:	/* autibz */
+    case 1232:	/* autiasp */
+    case 1231:	/* autiaz */
+    case 1230:	/* pacibsp */
+    case 1229:	/* pacibz */
+    case 1228:	/* paciasp */
+    case 1227:	/* paciaz */
+    case 1208:	/* psb */
+    case 1207:	/* esb */
+    case 1206:	/* autib1716 */
+    case 1205:	/* autia1716 */
+    case 1204:	/* pacib1716 */
+    case 1203:	/* pacia1716 */
+    case 1202:	/* xpaclri */
+    case 1201:	/* sevl */
+    case 1200:	/* sev */
+    case 1199:	/* wfi */
+    case 1198:	/* wfe */
+    case 1197:	/* yield */
+    case 1196:	/* bti */
+    case 1195:	/* csdb */
+    case 1194:	/* nop */
+    case 1193:	/* hint */
+      value = 1193;	/* --> hint.  */
+      break;
+    case 1212:	/* pssbb */
+    case 1211:	/* ssbb */
+    case 1210:	/* dsb */
+      value = 1210;	/* --> dsb.  */
+      break;
+    case 1223:	/* cpp */
+    case 1222:	/* dvp */
+    case 1221:	/* cfp */
+    case 1220:	/* tlbi */
+    case 1219:	/* ic */
+    case 1218:	/* dc */
+    case 1217:	/* at */
+    case 1216:	/* sys */
+      value = 1216;	/* --> sys.  */
+      break;
+    case 2032:	/* bic */
+    case 1282:	/* and */
+      value = 1282;	/* --> and.  */
+      break;
+    case 1265:	/* mov */
+    case 1284:	/* and */
+      value = 1284;	/* --> and.  */
+      break;
+    case 1269:	/* movs */
+    case 1285:	/* ands */
+      value = 1285;	/* --> ands.  */
+      break;
+    case 2033:	/* cmple */
+    case 1320:	/* cmpge */
+      value = 1320;	/* --> cmpge.  */
+      break;
+    case 2036:	/* cmplt */
+    case 1323:	/* cmpgt */
+      value = 1323;	/* --> cmpgt.  */
+      break;
+    case 2034:	/* cmplo */
+    case 1325:	/* cmphi */
+      value = 1325;	/* --> cmphi.  */
+      break;
+    case 2035:	/* cmpls */
+    case 1328:	/* cmphs */
+      value = 1328;	/* --> cmphs.  */
+      break;
+    case 1262:	/* mov */
+    case 1350:	/* cpy */
+      value = 1350;	/* --> cpy.  */
+      break;
+    case 1264:	/* mov */
+    case 1351:	/* cpy */
+      value = 1351;	/* --> cpy.  */
+      break;
+    case 2043:	/* fmov */
+    case 1267:	/* mov */
+    case 1352:	/* cpy */
+      value = 1352;	/* --> cpy.  */
       break;
     case 1257:	/* mov */
-    case 1345:	/* cpy */
-      value = 1345;	/* --> cpy.  */
+    case 1364:	/* dup */
+      value = 1364;	/* --> dup.  */
       break;
     case 1259:	/* mov */
-    case 1346:	/* cpy */
-      value = 1346;	/* --> cpy.  */
-      break;
-    case 2038:	/* fmov */
-    case 1262:	/* mov */
-    case 1347:	/* cpy */
-      value = 1347;	/* --> cpy.  */
-      break;
-    case 1252:	/* mov */
-    case 1359:	/* dup */
-      value = 1359;	/* --> dup.  */
-      break;
-    case 1254:	/* mov */
-    case 1251:	/* mov */
-    case 1360:	/* dup */
-      value = 1360;	/* --> dup.  */
-      break;
-    case 2037:	/* fmov */
     case 1256:	/* mov */
-    case 1361:	/* dup */
-      value = 1361;	/* --> dup.  */
+    case 1365:	/* dup */
+      value = 1365;	/* --> dup.  */
+      break;
+    case 2042:	/* fmov */
+    case 1261:	/* mov */
+    case 1366:	/* dup */
+      value = 1366;	/* --> dup.  */
+      break;
+    case 1260:	/* mov */
+    case 1367:	/* dupm */
+      value = 1367;	/* --> dupm.  */
+      break;
+    case 2037:	/* eon */
+    case 1369:	/* eor */
+      value = 1369;	/* --> eor.  */
+      break;
+    case 1270:	/* not */
+    case 1371:	/* eor */
+      value = 1371;	/* --> eor.  */
+      break;
+    case 1271:	/* nots */
+    case 1372:	/* eors */
+      value = 1372;	/* --> eors.  */
+      break;
+    case 2038:	/* facle */
+    case 1377:	/* facge */
+      value = 1377;	/* --> facge.  */
+      break;
+    case 2039:	/* faclt */
+    case 1378:	/* facgt */
+      value = 1378;	/* --> facgt.  */
+      break;
+    case 2040:	/* fcmle */
+    case 1391:	/* fcmge */
+      value = 1391;	/* --> fcmge.  */
+      break;
+    case 2041:	/* fcmlt */
+    case 1393:	/* fcmgt */
+      value = 1393;	/* --> fcmgt.  */
+      break;
+    case 1254:	/* fmov */
+    case 1399:	/* fcpy */
+      value = 1399;	/* --> fcpy.  */
+      break;
+    case 1253:	/* fmov */
+    case 1422:	/* fdup */
+      value = 1422;	/* --> fdup.  */
       break;
     case 1255:	/* mov */
-    case 1362:	/* dupm */
-      value = 1362;	/* --> dupm.  */
+    case 1753:	/* orr */
+      value = 1753;	/* --> orr.  */
       break;
-    case 2032:	/* eon */
-    case 1364:	/* eor */
-      value = 1364;	/* --> eor.  */
-      break;
-    case 1265:	/* not */
-    case 1366:	/* eor */
-      value = 1366;	/* --> eor.  */
-      break;
-    case 1266:	/* nots */
-    case 1367:	/* eors */
-      value = 1367;	/* --> eors.  */
-      break;
-    case 2033:	/* facle */
-    case 1372:	/* facge */
-      value = 1372;	/* --> facge.  */
-      break;
-    case 2034:	/* faclt */
-    case 1373:	/* facgt */
-      value = 1373;	/* --> facgt.  */
-      break;
-    case 2035:	/* fcmle */
-    case 1386:	/* fcmge */
-      value = 1386;	/* --> fcmge.  */
-      break;
-    case 2036:	/* fcmlt */
-    case 1388:	/* fcmgt */
-      value = 1388;	/* --> fcmgt.  */
-      break;
-    case 1249:	/* fmov */
-    case 1394:	/* fcpy */
-      value = 1394;	/* --> fcpy.  */
-      break;
-    case 1248:	/* fmov */
-    case 1417:	/* fdup */
-      value = 1417;	/* --> fdup.  */
-      break;
-    case 1250:	/* mov */
-    case 1748:	/* orr */
-      value = 1748;	/* --> orr.  */
-      break;
-    case 2039:	/* orn */
-    case 1749:	/* orr */
-      value = 1749;	/* --> orr.  */
-      break;
-    case 1253:	/* mov */
-    case 1751:	/* orr */
-      value = 1751;	/* --> orr.  */
-      break;
-    case 1263:	/* movs */
-    case 1752:	/* orrs */
-      value = 1752;	/* --> orrs.  */
+    case 2044:	/* orn */
+    case 1754:	/* orr */
+      value = 1754;	/* --> orr.  */
       break;
     case 1258:	/* mov */
-    case 1814:	/* sel */
-      value = 1814;	/* --> sel.  */
+    case 1756:	/* orr */
+      value = 1756;	/* --> orr.  */
       break;
-    case 1261:	/* mov */
-    case 1815:	/* sel */
-      value = 1815;	/* --> sel.  */
+    case 1268:	/* movs */
+    case 1757:	/* orrs */
+      value = 1757;	/* --> orrs.  */
+      break;
+    case 1263:	/* mov */
+    case 1819:	/* sel */
+      value = 1819;	/* --> sel.  */
+      break;
+    case 1266:	/* mov */
+    case 1820:	/* sel */
+      value = 1820;	/* --> sel.  */
       break;
     default: return NULL;
     }
@@ -613,11 +613,11 @@ aarch64_insert_operand (const aarch64_operand *self,
     case 9:
     case 10:
     case 11:
-    case 15:
+    case 12:
     case 16:
     case 17:
     case 18:
-    case 20:
+    case 19:
     case 21:
     case 22:
     case 23:
@@ -627,8 +627,7 @@ aarch64_insert_operand (const aarch64_operand *self,
     case 27:
     case 28:
     case 29:
-    case 160:
-    case 161:
+    case 30:
     case 162:
     case 163:
     case 164:
@@ -637,43 +636,44 @@ aarch64_insert_operand (const aarch64_operand *self,
     case 167:
     case 168:
     case 169:
-    case 182:
-    case 183:
-    case 184:
-    case 185:
+    case 170:
+    case 171:
     case 186:
     case 187:
     case 188:
     case 189:
     case 190:
+    case 191:
+    case 192:
+    case 193:
     case 194:
-    case 197:
+    case 200:
+    case 203:
       return aarch64_ins_regno (self, info, code, inst, errors);
-    case 13:
-      return aarch64_ins_reg_extended (self, info, code, inst, errors);
     case 14:
+      return aarch64_ins_reg_extended (self, info, code, inst, errors);
+    case 15:
       return aarch64_ins_reg_shifted (self, info, code, inst, errors);
-    case 19:
+    case 20:
       return aarch64_ins_ft (self, info, code, inst, errors);
-    case 30:
     case 31:
     case 32:
     case 33:
-    case 199:
-      return aarch64_ins_reglane (self, info, code, inst, errors);
     case 34:
-      return aarch64_ins_reglist (self, info, code, inst, errors);
+    case 206:
+      return aarch64_ins_reglane (self, info, code, inst, errors);
     case 35:
-      return aarch64_ins_ldst_reglist (self, info, code, inst, errors);
+      return aarch64_ins_reglist (self, info, code, inst, errors);
     case 36:
-      return aarch64_ins_ldst_reglist_r (self, info, code, inst, errors);
+      return aarch64_ins_ldst_reglist (self, info, code, inst, errors);
     case 37:
-      return aarch64_ins_ldst_elemlist (self, info, code, inst, errors);
+      return aarch64_ins_ldst_reglist_r (self, info, code, inst, errors);
     case 38:
+      return aarch64_ins_ldst_elemlist (self, info, code, inst, errors);
     case 39:
     case 40:
     case 41:
-    case 51:
+    case 42:
     case 52:
     case 53:
     case 54:
@@ -689,55 +689,56 @@ aarch64_insert_operand (const aarch64_operand *self,
     case 64:
     case 65:
     case 66:
-    case 78:
+    case 67:
     case 79:
     case 80:
     case 81:
-    case 157:
+    case 82:
     case 159:
-    case 174:
-    case 175:
-    case 176:
-    case 177:
+    case 161:
     case 178:
     case 179:
     case 180:
     case 181:
+    case 182:
+    case 183:
+    case 184:
+    case 185:
+    case 205:
       return aarch64_ins_imm (self, info, code, inst, errors);
-    case 42:
     case 43:
-      return aarch64_ins_advsimd_imm_shift (self, info, code, inst, errors);
     case 44:
+      return aarch64_ins_advsimd_imm_shift (self, info, code, inst, errors);
     case 45:
     case 46:
+    case 47:
       return aarch64_ins_advsimd_imm_modified (self, info, code, inst, errors);
-    case 50:
-    case 148:
+    case 51:
+    case 149:
       return aarch64_ins_fpimm (self, info, code, inst, errors);
-    case 67:
-    case 155:
-      return aarch64_ins_limm (self, info, code, inst, errors);
     case 68:
-      return aarch64_ins_aimm (self, info, code, inst, errors);
+    case 157:
+      return aarch64_ins_limm (self, info, code, inst, errors);
     case 69:
-      return aarch64_ins_imm_half (self, info, code, inst, errors);
+      return aarch64_ins_aimm (self, info, code, inst, errors);
     case 70:
+      return aarch64_ins_imm_half (self, info, code, inst, errors);
+    case 71:
       return aarch64_ins_fbits (self, info, code, inst, errors);
-    case 72:
     case 73:
-    case 153:
-      return aarch64_ins_imm_rotate2 (self, info, code, inst, errors);
     case 74:
-    case 152:
-      return aarch64_ins_imm_rotate1 (self, info, code, inst, errors);
+    case 154:
+      return aarch64_ins_imm_rotate2 (self, info, code, inst, errors);
     case 75:
+    case 153:
+    case 155:
+      return aarch64_ins_imm_rotate1 (self, info, code, inst, errors);
     case 76:
+    case 77:
       return aarch64_ins_cond (self, info, code, inst, errors);
-    case 82:
+    case 83:
     case 92:
       return aarch64_ins_addr_simple (self, info, code, inst, errors);
-    case 83:
-      return aarch64_ins_addr_simple_2 (self, info, code, inst, errors);
     case 84:
       return aarch64_ins_addr_regoff (self, info, code, inst, errors);
     case 85:
@@ -801,8 +802,8 @@ aarch64_insert_operand (const aarch64_operand *self,
     case 128:
     case 129:
     case 130:
-      return aarch64_ins_sve_addr_rr_lsl (self, info, code, inst, errors);
     case 131:
+      return aarch64_ins_sve_addr_rr_lsl (self, info, code, inst, errors);
     case 132:
     case 133:
     case 134:
@@ -810,48 +811,53 @@ aarch64_insert_operand (const aarch64_operand *self,
     case 136:
     case 137:
     case 138:
-      return aarch64_ins_sve_addr_rz_xtw (self, info, code, inst, errors);
     case 139:
+      return aarch64_ins_sve_addr_rz_xtw (self, info, code, inst, errors);
     case 140:
     case 141:
     case 142:
-      return aarch64_ins_sve_addr_zi_u5 (self, info, code, inst, errors);
     case 143:
-      return aarch64_ins_sve_addr_zz_lsl (self, info, code, inst, errors);
+      return aarch64_ins_sve_addr_zi_u5 (self, info, code, inst, errors);
     case 144:
-      return aarch64_ins_sve_addr_zz_sxtw (self, info, code, inst, errors);
+      return aarch64_ins_sve_addr_zz_lsl (self, info, code, inst, errors);
     case 145:
-      return aarch64_ins_sve_addr_zz_uxtw (self, info, code, inst, errors);
+      return aarch64_ins_sve_addr_zz_sxtw (self, info, code, inst, errors);
     case 146:
-      return aarch64_ins_sve_aimm (self, info, code, inst, errors);
+      return aarch64_ins_sve_addr_zz_uxtw (self, info, code, inst, errors);
     case 147:
+      return aarch64_ins_sve_aimm (self, info, code, inst, errors);
+    case 148:
       return aarch64_ins_sve_asimm (self, info, code, inst, errors);
-    case 149:
-      return aarch64_ins_sve_float_half_one (self, info, code, inst, errors);
     case 150:
-      return aarch64_ins_sve_float_half_two (self, info, code, inst, errors);
+      return aarch64_ins_sve_float_half_one (self, info, code, inst, errors);
     case 151:
+      return aarch64_ins_sve_float_half_two (self, info, code, inst, errors);
+    case 152:
       return aarch64_ins_sve_float_zero_one (self, info, code, inst, errors);
-    case 154:
-      return aarch64_ins_inv_limm (self, info, code, inst, errors);
     case 156:
-      return aarch64_ins_sve_limm_mov (self, info, code, inst, errors);
+      return aarch64_ins_inv_limm (self, info, code, inst, errors);
     case 158:
+      return aarch64_ins_sve_limm_mov (self, info, code, inst, errors);
+    case 160:
       return aarch64_ins_sve_scale (self, info, code, inst, errors);
-    case 170:
-    case 171:
-      return aarch64_ins_sve_shlimm (self, info, code, inst, errors);
     case 172:
     case 173:
+    case 174:
+      return aarch64_ins_sve_shlimm (self, info, code, inst, errors);
+    case 175:
+    case 176:
+    case 177:
       return aarch64_ins_sve_shrimm (self, info, code, inst, errors);
-    case 191:
-    case 192:
-    case 193:
-      return aarch64_ins_sve_quad_index (self, info, code, inst, errors);
     case 195:
-      return aarch64_ins_sve_index (self, info, code, inst, errors);
     case 196:
+    case 197:
     case 198:
+    case 199:
+      return aarch64_ins_sve_quad_index (self, info, code, inst, errors);
+    case 201:
+      return aarch64_ins_sve_index (self, info, code, inst, errors);
+    case 202:
+    case 204:
       return aarch64_ins_sve_reglist (self, info, code, inst, errors);
     default: assert (0); abort ();
     }

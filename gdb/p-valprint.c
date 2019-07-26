@@ -38,7 +38,7 @@
 #include "cp-abi.h"
 #include "cp-support.h"
 #include "objfiles.h"
-#include "common/byte-vector.h"
+#include "gdbsupport/byte-vector.h"
 
 
 /* Decorations for Pascal.  */
@@ -248,7 +248,6 @@ pascal_val_print (struct type *type,
 	      struct value *vt_val;
 	      struct symbol *wsym = NULL;
 	      struct type *wtype;
-	      struct block *block = NULL;
 
 	      if (want_space)
 		fputs_filtered (" ", stream);
@@ -257,7 +256,7 @@ pascal_val_print (struct type *type,
 		{
 		  const char *search_name
 		    = MSYMBOL_SEARCH_NAME (msymbol.minsym);
-		  wsym = lookup_symbol_search_name (search_name, block,
+		  wsym = lookup_symbol_search_name (search_name, NULL,
 						    VAR_DOMAIN).symbol;
 		}
 
@@ -349,7 +348,6 @@ pascal_val_print (struct type *type,
       if (TYPE_STUB (elttype))
 	{
 	  fprintf_filtered (stream, "<incomplete type>");
-	  gdb_flush (stream);
 	  break;
 	}
       else
@@ -418,7 +416,6 @@ pascal_val_print (struct type *type,
       error (_("Invalid pascal type code %d in symbol table."),
 	     TYPE_CODE (type));
     }
-  gdb_flush (stream);
 }
 
 void
@@ -754,18 +751,17 @@ pascal_object_print_value (struct type *type, const gdb_byte *valaddr,
 
       thisoffset = offset;
 
-      TRY
+      try
 	{
 	  boffset = baseclass_offset (type, i, valaddr, offset, address, val);
 	}
-      CATCH (ex, RETURN_MASK_ERROR)
+      catch (const gdb_exception_error &ex)
 	{
 	  if (ex.error == NOT_AVAILABLE_ERROR)
 	    skip = -1;
 	  else
 	    skip = 1;
 	}
-      END_CATCH
 
       if (skip == 0)
 	{

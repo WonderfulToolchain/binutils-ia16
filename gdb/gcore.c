@@ -35,8 +35,9 @@
 #include "gdb_bfd.h"
 #include "readline/tilde.h"
 #include <algorithm>
-#include "common/gdb_unlinker.h"
-#include "byte-vector.h"
+#include "gdbsupport/gdb_unlinker.h"
+#include "gdbsupport/byte-vector.h"
+#include "gdbsupport/scope-exit.h"
 
 /* The largest amount of memory to read from the target at once.  We
    must throttle it to limit the amount of memory used by GDB during
@@ -114,24 +115,9 @@ write_gcore_file_1 (bfd *obfd)
 void
 write_gcore_file (bfd *obfd)
 {
-  struct gdb_exception except = exception_none;
-
   target_prepare_to_generate_core ();
-
-  TRY
-    {
-      write_gcore_file_1 (obfd);
-    }
-  CATCH (e, RETURN_MASK_ALL)
-    {
-      except = e;
-    }
-  END_CATCH
-
-  target_done_generating_core ();
-
-  if (except.reason < 0)
-    throw_exception (except);
+  SCOPE_EXIT { target_done_generating_core (); };
+  write_gcore_file_1 (obfd);
 }
 
 /* gcore_command -- implements the 'gcore' command.
@@ -426,7 +412,7 @@ gcore_create_callback (CORE_ADDR vaddr, unsigned long size, int read,
 	 If so, we can avoid copying its contents by clearing SEC_LOAD.  */
       struct obj_section *objsec;
 
-      for (objfile *objfile : all_objfiles (current_program_space))
+      for (objfile *objfile : current_program_space->objfiles ())
 	ALL_OBJFILE_OSECTIONS (objfile, objsec)
 	  {
 	    bfd *abfd = objfile->obfd;
@@ -493,7 +479,7 @@ objfile_find_memory_regions (struct target_ops *self,
   bfd_vma temp_bottom, temp_top;
 
   /* Call callback function for each objfile section.  */
-  for (objfile *objfile : all_objfiles (current_program_space))
+  for (objfile *objfile : current_program_space->objfiles ())
     ALL_OBJFILE_OSECTIONS (objfile, objsec)
       {
 	bfd *ibfd = objfile->obfd;

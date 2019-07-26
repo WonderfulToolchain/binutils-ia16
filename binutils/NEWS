@@ -1,5 +1,29 @@
 -*- text -*-
 
+* Add --verilog-data-width option to objcopy for verilog targets to control
+  width of data elements in verilog hex format.
+
+* Add support for the Armv8.1-M Mainline and M-profile Vector Extension (MVE)
+  instructions.
+
+* The separate debug info file options of readelf (--debug-dump=links
+  and --debug-dump=follow) and objdump (--dwarf=links and
+  --dwarf=follow-links) will now display and/or follow multiple links if
+  more than one are present in a file.  (This usually happens when gcc's
+  -gsplit-dwarf option is used).
+
+  In addition objdump's --dwarf=follow-links now also affects its other
+  display options, so that for example, when combined with --syms it will
+  cause the symbol tables in any linked debug info files to also be
+  displayed.  In addition when combined with --disassemble the --dwarf=
+  follow-links option will ensure that any symbol tables in the linked
+  files are read and used when disassembling code in the main file.
+
+ * Add support for dumping types encoded in the Compact Type Format
+   to objdump and readelf.
+
+Changes in 2.32:
+
 * The addr2line, c++filt, nm and objdump tools now have a limit on the
   maximum amount of recursion that is allowed whilst demangling strings.
   The value for this limit is defined by the DEMANGLE_RECRUSE_LIMIT
@@ -13,7 +37,7 @@
 
 * Objdump's --disassemble option can now take a parameter, specifying the
   starting symbol for disassembly.  Disassembly will continue from this
-  symbol up to the next symbol.
+  symbol up to the next symbol or the end of the function.
 
 * The MIPS port now supports the Loongson 2K1000 processor which implements
   the MIPS64r2 ISA, the Loongson-mmi ASE, Loongson-cam ASE, Loongson-ext ASE,
@@ -30,6 +54,11 @@
   and Loongson-ext ASE instructions. Add -march=gs464 option for Loongson
   3A1000 processor, The -march=loongson3a is an alias of -march=gs464 for
   compatibility.
+
+* The size tool now has a new output format '--format=GNU' or '-G'.  The
+  results are displayed in a similar manor to the default berkeley layout,
+  except read-only data is counted in the data column, not the text column.
+  Additionally the total is only included once.
 
 Changes in 2.31:
 

@@ -40,7 +40,7 @@
 #include "dwarf2loc.h"
 #include "dwarf2-frame-tailcall.h"
 #if GDB_SELF_TEST
-#include "selftest.h"
+#include "gdbsupport/selftest.h"
 #include "selftest-arch.h"
 #endif
 
@@ -290,7 +290,7 @@ class dwarf_expr_executor : public dwarf_expr_context
 
   CORE_ADDR get_addr_index (unsigned int index) override
   {
-    invalid ("DW_OP_GNU_addr_index");
+    invalid ("DW_OP_addrx or DW_OP_GNU_addr_index");
   }
 
  private:
@@ -1044,7 +1044,7 @@ dwarf2_frame_cache (struct frame_info *this_frame, void **this_cache)
   execute_cfa_program (fde, instr, fde->end, gdbarch,
 		       get_frame_address_in_block (this_frame), &fs);
 
-  TRY
+  try
     {
       /* Calculate the CFA.  */
       switch (fs.regs.cfa_how)
@@ -1068,7 +1068,7 @@ dwarf2_frame_cache (struct frame_info *this_frame, void **this_cache)
 	  internal_error (__FILE__, __LINE__, _("Unknown CFA rule."));
 	}
     }
-  CATCH (ex, RETURN_MASK_ERROR)
+  catch (const gdb_exception_error &ex)
     {
       if (ex.error == NOT_AVAILABLE_ERROR)
 	{
@@ -1076,9 +1076,8 @@ dwarf2_frame_cache (struct frame_info *this_frame, void **this_cache)
 	  return cache;
 	}
 
-      throw_exception (ex);
+      throw;
     }
-  END_CATCH
 
   /* Initialize the register state.  */
   {
@@ -1464,7 +1463,9 @@ dwarf2_frame_cfa (struct frame_info *this_frame)
   return get_frame_base (this_frame);
 }
 
-const struct objfile_data *dwarf2_frame_objfile_data;
+const struct objfile_key<dwarf2_fde_table,
+			 gdb::noop_deleter<dwarf2_fde_table>>
+  dwarf2_frame_objfile_data;
 
 static unsigned int
 read_1_byte (bfd *abfd, const gdb_byte *buf)
@@ -1488,7 +1489,7 @@ static ULONGEST
 read_initial_length (bfd *abfd, const gdb_byte *buf,
 		     unsigned int *bytes_read_ptr)
 {
-  LONGEST result;
+  ULONGEST result;
 
   result = bfd_get_32 (abfd, buf);
   if (result == 0xffffffff)
@@ -1702,20 +1703,18 @@ bsearch_fde_cmp (const void *key, const void *element)
 static struct dwarf2_fde *
 dwarf2_frame_find_fde (CORE_ADDR *pc, CORE_ADDR *out_offset)
 {
-  for (objfile *objfile : all_objfiles (current_program_space))
+  for (objfile *objfile : current_program_space->objfiles ())
     {
       struct dwarf2_fde_table *fde_table;
       struct dwarf2_fde **p_fde;
       CORE_ADDR offset;
       CORE_ADDR seek_pc;
 
-      fde_table = ((struct dwarf2_fde_table *)
-		   objfile_data (objfile, dwarf2_frame_objfile_data));
+      fde_table = dwarf2_frame_objfile_data.get (objfile);
       if (fde_table == NULL)
 	{
 	  dwarf2_build_frame_info (objfile);
-	  fde_table = ((struct dwarf2_fde_table *)
-		       objfile_data (objfile, dwarf2_frame_objfile_data));
+	  fde_table = dwarf2_frame_objfile_data.get (objfile);
 	}
       gdb_assert (fde_table != NULL);
 
@@ -1789,7 +1788,7 @@ decode_frame_entry_1 (struct comp_unit *unit, const gdb_byte *start,
 {
   struct gdbarch *gdbarch = get_objfile_arch (unit->objfile);
   const gdb_byte *buf, *end;
-  LONGEST length;
+  ULONGEST length;
   unsigned int bytes_read;
   int dwarf64_p;
   ULONGEST cie_id;
@@ -1800,14 +1799,14 @@ decode_frame_entry_1 (struct comp_unit *unit, const gdb_byte *start,
   buf = start;
   length = read_initial_length (unit->abfd, buf, &bytes_read);
   buf += bytes_read;
-  end = buf + length;
-
-  /* Are we still within the section?  */
-  if (end > unit->dwarf_frame_buffer + unit->dwarf_frame_size)
-    return NULL;
+  end = buf + (size_t) length;
 
   if (length == 0)
     return end;
+
+  /* Are we still within the section?  */
+  if (end <= buf || end > unit->dwarf_frame_buffer + unit->dwarf_frame_size)
+    return NULL;
 
   /* Distinguish between 32 and 64-bit encoded frame info.  */
   dwarf64_p = (bytes_read == 12);
@@ -2245,7 +2244,7 @@ dwarf2_build_frame_info (struct objfile *objfile)
           if (txt)
             unit->tbase = txt->vma;
 
-	  TRY
+	  try
 	    {
 	      frame_ptr = unit->dwarf_frame_buffer;
 	      while (frame_ptr < unit->dwarf_frame_buffer + unit->dwarf_frame_size)
@@ -2254,10 +2253,10 @@ dwarf2_build_frame_info (struct objfile *objfile)
 						EH_CIE_OR_FDE_TYPE_ID);
 	    }
 
-	  CATCH (e, RETURN_MASK_ERROR)
+	  catch (const gdb_exception_error &e)
 	    {
 	      warning (_("skipping .eh_frame info of %s: %s"),
-		       objfile_name (objfile), e.message);
+		       objfile_name (objfile), e.what ());
 
 	      if (fde_table.num_entries != 0)
 		{
@@ -2267,7 +2266,6 @@ dwarf2_build_frame_info (struct objfile *objfile)
 		}
 	      /* The cie_table is discarded by the next if.  */
 	    }
-	  END_CATCH
 
           if (cie_table.num_entries != 0)
             {
@@ -2287,7 +2285,7 @@ dwarf2_build_frame_info (struct objfile *objfile)
     {
       int num_old_fde_entries = fde_table.num_entries;
 
-      TRY
+      try
 	{
 	  frame_ptr = unit->dwarf_frame_buffer;
 	  while (frame_ptr < unit->dwarf_frame_buffer + unit->dwarf_frame_size)
@@ -2295,10 +2293,10 @@ dwarf2_build_frame_info (struct objfile *objfile)
 					    &cie_table, &fde_table,
 					    EH_CIE_OR_FDE_TYPE_ID);
 	}
-      CATCH (e, RETURN_MASK_ERROR)
+      catch (const gdb_exception_error &e)
 	{
 	  warning (_("skipping .debug_frame info of %s: %s"),
-		   objfile_name (objfile), e.message);
+		   objfile_name (objfile), e.what ());
 
 	  if (fde_table.num_entries != 0)
 	    {
@@ -2318,7 +2316,6 @@ dwarf2_build_frame_info (struct objfile *objfile)
 	  fde_table.num_entries = num_old_fde_entries;
 	  /* The cie_table is discarded by the next if.  */
 	}
-      END_CATCH
     }
 
   /* Discard the cie_table, it is no longer needed.  */
@@ -2400,7 +2397,7 @@ dwarf2_build_frame_info (struct objfile *objfile)
       xfree (fde_table.entries);
     }
 
-  set_objfile_data (objfile, dwarf2_frame_objfile_data, fde_table2);
+  dwarf2_frame_objfile_data.set (objfile, fde_table2);
 }
 
 /* Handle 'maintenance show dwarf unwinders'.  */
@@ -2419,7 +2416,6 @@ void
 _initialize_dwarf2_frame (void)
 {
   dwarf2_frame_data = gdbarch_data_register_pre_init (dwarf2_frame_init);
-  dwarf2_frame_objfile_data = register_objfile_data ();
 
   add_setshow_boolean_cmd ("unwinders", class_obscure,
 			   &dwarf2_frame_unwinders_enabled_p , _("\

@@ -40,15 +40,14 @@
 #include "inline-frame.h"
 #include "tracepoint.h"
 #include "gdb/fileio.h"
-#include "agent.h"
+#include "gdbsupport/agent.h"
 #include "auxv.h"
 #include "target-debug.h"
 #include "top.h"
 #include "event-top.h"
 #include <algorithm>
-#include "byte-vector.h"
+#include "gdbsupport/byte-vector.h"
 #include "terminal.h"
-#include <algorithm>
 #include <unordered_map>
 
 static void generic_tls_error (void) ATTRIBUTE_NORETURN;
@@ -93,7 +92,7 @@ static int dummy_find_memory_regions (struct target_ops *self,
 static char *dummy_make_corefile_notes (struct target_ops *self,
 					bfd *ignore1, int *ignore2);
 
-static const char *default_pid_to_str (struct target_ops *ops, ptid_t ptid);
+static std::string default_pid_to_str (struct target_ops *ops, ptid_t ptid);
 
 static enum exec_direction_kind default_execution_direction
     (struct target_ops *self);
@@ -107,10 +106,8 @@ static enum exec_direction_kind default_execution_direction
 static std::unordered_map<const target_info *, target_open_ftype *>
   target_factories;
 
-/* The initial current target, so that there is always a semi-valid
-   current target.  */
+/* The singleton debug target.  */
 
-static struct target_ops *the_dummy_target;
 static struct target_ops *the_debug_target;
 
 /* The target stack.  */
@@ -586,6 +583,15 @@ push_target (struct target_ops *t)
   g_target_stack.push (t);
 }
 
+/* See target.h  */
+
+void
+push_target (target_ops_up &&t)
+{
+  g_target_stack.push (t.get ());
+  t.release ();
+}
+
 /* See target.h.  */
 
 int
@@ -599,13 +605,13 @@ unpush_target (struct target_ops *t)
 bool
 target_stack::unpush (target_ops *t)
 {
+  gdb_assert (t != NULL);
+
   strata stratum = t->stratum ();
 
   if (stratum == dummy_stratum)
     internal_error (__FILE__, __LINE__,
 		    _("Attempt to unpush the dummy target"));
-
-  gdb_assert (t != NULL);
 
   /* Look for the specified target.  Note that a target can only occur
      once in the target stack.  */
@@ -692,24 +698,29 @@ target_translate_tls_address (struct objfile *objfile, CORE_ADDR offset)
 {
   volatile CORE_ADDR addr = 0;
   struct target_ops *target = current_top_target ();
+  struct gdbarch *gdbarch = target_gdbarch ();
 
-  if (gdbarch_fetch_tls_load_module_address_p (target_gdbarch ()))
+  if (gdbarch_fetch_tls_load_module_address_p (gdbarch))
     {
       ptid_t ptid = inferior_ptid;
 
-      TRY
+      try
 	{
 	  CORE_ADDR lm_addr;
 	  
 	  /* Fetch the load module address for this objfile.  */
-	  lm_addr = gdbarch_fetch_tls_load_module_address (target_gdbarch (),
+	  lm_addr = gdbarch_fetch_tls_load_module_address (gdbarch,
 	                                                   objfile);
 
-	  addr = target->get_thread_local_address (ptid, lm_addr, offset);
+	  if (gdbarch_get_thread_local_address_p (gdbarch))
+	    addr = gdbarch_get_thread_local_address (gdbarch, ptid, lm_addr,
+						     offset);
+	  else
+	    addr = target->get_thread_local_address (ptid, lm_addr, offset);
 	}
       /* If an error occurred, print TLS related messages here.  Otherwise,
          throw the error to some higher catcher.  */
-      CATCH (ex, RETURN_MASK_ALL)
+      catch (const gdb_exception &ex)
 	{
 	  int objfile_is_library = (objfile->flags & OBJF_SHARED);
 
@@ -733,35 +744,34 @@ target_translate_tls_address (struct objfile *objfile, CORE_ADDR offset)
 		         " thread-local variables in\n"
 		         "the shared library `%s'\n"
 		         "for %s"),
-		       objfile_name (objfile), target_pid_to_str (ptid));
+		       objfile_name (objfile),
+		       target_pid_to_str (ptid).c_str ());
 	      else
 		error (_("The inferior has not yet allocated storage for"
 		         " thread-local variables in\n"
 		         "the executable `%s'\n"
 		         "for %s"),
-		       objfile_name (objfile), target_pid_to_str (ptid));
+		       objfile_name (objfile),
+		       target_pid_to_str (ptid).c_str ());
 	      break;
 	    case TLS_GENERIC_ERROR:
 	      if (objfile_is_library)
 		error (_("Cannot find thread-local storage for %s, "
 		         "shared library %s:\n%s"),
-		       target_pid_to_str (ptid),
-		       objfile_name (objfile), ex.message);
+		       target_pid_to_str (ptid).c_str (),
+		       objfile_name (objfile), ex.what ());
 	      else
 		error (_("Cannot find thread-local storage for %s, "
 		         "executable file %s:\n%s"),
-		       target_pid_to_str (ptid),
-		       objfile_name (objfile), ex.message);
+		       target_pid_to_str (ptid).c_str (),
+		       objfile_name (objfile), ex.what ());
 	      break;
 	    default:
-	      throw_exception (ex);
+	      throw;
 	      break;
 	    }
 	}
-      END_CATCH
     }
-  /* It wouldn't be wrong here to try a gdbarch method, too; finding
-     TLS is an ABI-specific thing.  But we don't do that yet.  */
   else
     error (_("Cannot find thread-local variables on this target"));
 
@@ -2002,6 +2012,11 @@ target_preopen (int from_tty)
 void
 target_detach (inferior *inf, int from_tty)
 {
+  /* After we have detached, we will clear the register cache for this inferior
+     by calling registers_changed_ptid.  We must save the pid_ptid before
+     detaching, as the target detach method will clear inf->pid.  */
+  ptid_t save_pid_ptid = ptid_t (inf->pid);
+
   /* As long as some to_detach implementations rely on the current_inferior
      (either directly, or indirectly, like through target_gdbarch or by
      reading memory), INF needs to be the current inferior.  When that
@@ -2021,6 +2036,14 @@ target_detach (inferior *inf, int from_tty)
   prepare_for_detach ();
 
   current_top_target ()->detach (inf, from_tty);
+
+  registers_changed_ptid (save_pid_ptid);
+
+  /* We have to ensure we have no frame cache left.  Normally,
+     registers_changed_ptid (save_pid_ptid) calls reinit_frame_cache when
+     inferior_ptid matches save_pid_ptid, but in our case, it does not
+     call it, as inferior_ptid has been reset.  */
+  reinit_frame_cache ();
 }
 
 void
@@ -2053,7 +2076,7 @@ default_target_wait (struct target_ops *ops,
   return minus_one_ptid;
 }
 
-const char *
+std::string
 target_pid_to_str (ptid_t ptid)
 {
   return current_top_target ()->pid_to_str (ptid);
@@ -2072,6 +2095,14 @@ target_thread_handle_to_thread_info (const gdb_byte *thread_handle,
 {
   return current_top_target ()->thread_handle_to_thread_info (thread_handle,
 						     handle_len, inf);
+}
+
+/* See target.h.  */
+
+gdb::byte_vector
+target_thread_info_to_thread_handle (struct thread_info *tip)
+{
+  return current_top_target ()->thread_info_to_thread_handle (tip);
 }
 
 void
@@ -2112,15 +2143,15 @@ make_scoped_defer_target_commit_resume ()
 }
 
 void
-target_pass_signals (int numsigs, unsigned char *pass_signals)
+target_pass_signals (gdb::array_view<const unsigned char> pass_signals)
 {
-  current_top_target ()->pass_signals (numsigs, pass_signals);
+  current_top_target ()->pass_signals (pass_signals);
 }
 
 void
-target_program_signals (int numsigs, unsigned char *program_signals)
+target_program_signals (gdb::array_view<const unsigned char> program_signals)
 {
-  current_top_target ()->program_signals (numsigs, program_signals);
+  current_top_target ()->program_signals (program_signals);
 }
 
 static int
@@ -2144,7 +2175,7 @@ target_follow_fork (int follow_child, int detach_fork)
 /* Target wrapper for follow exec hook.  */
 
 void
-target_follow_exec (struct inferior *inf, char *execd_pathname)
+target_follow_exec (struct inferior *inf, const char *execd_pathname)
 {
   current_top_target ()->follow_exec (inf, execd_pathname);
 }
@@ -3075,7 +3106,7 @@ target_fileio_read_stralloc (struct inferior *inf, const char *filename)
     return gdb::unique_xmalloc_ptr<char> (nullptr);
 
   if (transferred == 0)
-    return gdb::unique_xmalloc_ptr<char> (xstrdup (""));
+    return make_unique_xstrdup ("");
 
   bufstr[transferred] = 0;
 
@@ -3148,8 +3179,7 @@ target_announce_detach (int from_tty)
 
   pid = inferior_ptid.pid ();
   printf_unfiltered (_("Detaching from program: %s, %s\n"), exec_file,
-		     target_pid_to_str (ptid_t (pid)));
-  gdb_flush (gdb_stdout);
+		     target_pid_to_str (ptid_t (pid)).c_str ());
 }
 
 /* The inferior process has died.  Long live the inferior!  */
@@ -3186,16 +3216,13 @@ generic_mourn_inferior (void)
 /* Convert a normal process ID to a string.  Returns the string in a
    static buffer.  */
 
-const char *
+std::string
 normal_pid_to_str (ptid_t ptid)
 {
-  static char buf[32];
-
-  xsnprintf (buf, sizeof buf, "process %d", ptid.pid ());
-  return buf;
+  return string_printf ("process %d", ptid.pid ());
 }
 
-static const char *
+static std::string
 default_pid_to_str (struct target_ops *ops, ptid_t ptid)
 {
   return normal_pid_to_str (ptid);
@@ -3221,6 +3248,10 @@ dummy_make_corefile_notes (struct target_ops *self,
 
 #include "target-delegates.c"
 
+/* The initial current target, so that there is always a semi-valid
+   current target.  */
+
+static dummy_target the_dummy_target;
 
 static const target_info dummy_target_info = {
   "None",
@@ -3762,9 +3793,9 @@ flash_erase_command (const char *cmd, int from_tty)
 	  ui_out_emit_tuple tuple_emitter (current_uiout, "erased-regions");
 
           current_uiout->message (_("Erasing flash memory region at address "));
-          current_uiout->field_fmt ("address", "%s", paddress (gdbarch, m.lo));
+          current_uiout->field_core_addr ("address", gdbarch, m.lo);
           current_uiout->message (", size = ");
-          current_uiout->field_fmt ("size", "%s", hex_string (m.hi - m.lo));
+          current_uiout->field_string ("size", hex_string (m.hi - m.lo));
           current_uiout->message ("\n");
         }
     }
@@ -3958,8 +3989,7 @@ set_write_memory_permission (const char *args, int from_tty,
 void
 initialize_targets (void)
 {
-  the_dummy_target = new dummy_target ();
-  push_target (the_dummy_target);
+  push_target (&the_dummy_target);
 
   the_debug_target = new debug_target ();
 

@@ -19,22 +19,20 @@
 
 
 #include "defs.h"
-#include "common/preprocessor.h"
+#include "gdbsupport/preprocessor.h"
 #include "gdbtypes.h"
 #include "compile-internal.h"
 #include "compile-cplus.h"
-#include "gdb_assert.h"
+#include "gdbsupport/gdb_assert.h"
 #include "symtab.h"
 #include "source.h"
 #include "cp-support.h"
 #include "cp-abi.h"
-#include "symtab.h"
 #include "objfiles.h"
 #include "block.h"
 #include "gdbcmd.h"
 #include "c-lang.h"
-#include "compile-c.h" 		/* Included for c_get_range_decl_name
-				   et al.  */
+#include "compile-c.h"
 #include <algorithm>
 
 /* Default compile flags for C++.  */
@@ -67,7 +65,7 @@ compile_cplus_instance::decl_name (const char *natural)
   if (name != nullptr)
     return name;
 
-  return gdb::unique_xmalloc_ptr<char> (xstrdup (natural));
+  return make_unique_xstrdup (natural);
 }
 
 /* Get the access flag for the NUM'th field of TYPE.  */
@@ -912,7 +910,7 @@ static gcc_type
 compile_cplus_convert_enum (compile_cplus_instance *instance, struct type *type,
 			    enum gcc_cp_symbol_kind nested_access)
 {
-  int scoped_enum_p = FALSE;
+  bool scoped_enum_p = false;
 
   /* Create a new scope for this type.  */
   compile_scope scope = instance->new_scope (TYPE_NAME (type), type);
