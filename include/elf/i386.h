@@ -74,6 +74,7 @@ START_RELOC_NUMBERS (elf_i386_reloc_type)
      RELOC_NUMBER (R_386_SEG16,        45)
      RELOC_NUMBER (R_386_SUB16,        46)
      RELOC_NUMBER (R_386_SUB32,        47)
+     RELOC_NUMBER (R_386_SEGRELATIVE,  48)
 
      /* Used by Intel.  */
      RELOC_NUMBER (R_386_USED_BY_INTEL_200, 200)
