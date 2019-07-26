@@ -29,14 +29,10 @@
 
 #include "elf/i386.h"
 
-static bfd_reloc_status_type bfd_i386_elf_sub16_reloc (bfd *, arelent *,
-						       asymbol *, void *,
-						       asection *, bfd *,
-						       char **);
-static bfd_reloc_status_type bfd_i386_elf_sub32_reloc (bfd *, arelent *,
-						       asymbol *, void *,
-						       asection *, bfd *,
-						       char **);
+static bfd_reloc_status_type bfd_i386_elf_reloc_nonelf (bfd *, arelent *,
+							asymbol *, void *,
+							asection *, bfd *,
+							char **);
 static bfd_reloc_status_type bfd_i386_elf_segment16_reloc (bfd *, arelent *,
 							   asymbol *, void *,
 							   asection *, bfd *,
@@ -45,14 +41,6 @@ static bfd_reloc_status_type bfd_i386_elf_relseg16_reloc (bfd *, arelent *,
 							  asymbol *, void *,
 							  asection *, bfd *,
 							  char **);
-static bfd_reloc_status_type bfd_i386_elf_ozxx16_reloc (bfd *, arelent *,
-							asymbol *, void *,
-							asection *, bfd *,
-							char **);
-static bfd_reloc_status_type bfd_i386_elf_ozxx32_reloc (bfd *, arelent *,
-							asymbol *, void *,
-							asection *, bfd *,
-							char **);
 
 static reloc_howto_type elf_howto_table[]=
 {
@@ -173,17 +161,16 @@ static reloc_howto_type elf_howto_table[]=
 #define R_386_ext2 (R_386_GOT32X + 1 - R_386_tls_offset)
 #define R_386_ia16_new_offset (R_386_SEG16X - R_386_ext2)
 
-  /* Newer, experimental IA16 relocations.  Special routines are needed for
-     R_386_SUB{16, 32}, especially when outputting a non-ELF file --- in that
-     case, the relocations will not go via elf_i386_relocate_section (...).  */
+  /* Newer, experimental IA16 relocations.  R_386_SUB16 and R_386_SUB32 are
+     currently only supported when the output format is also ELF.  */
   HOWTO(R_386_SEG16X, 4, 1, 16, FALSE, 0, complain_overflow_unsigned,
 	bfd_elf_generic_reloc, "R_386_SEG16X",
 	TRUE, 0xffff, 0xffff, FALSE),
   HOWTO(R_386_SUB16, 0, 1, 16, FALSE, 0, complain_overflow_bitfield,
-	bfd_i386_elf_sub16_reloc, "R_386_SUB16",
+	bfd_i386_elf_reloc_nonelf, "R_386_SUB16",
 	TRUE, 0xffff, 0xffff, FALSE),
   HOWTO(R_386_SUB32, 0, 2, 32, FALSE, 0, complain_overflow_bitfield,
-	bfd_i386_elf_sub32_reloc, "R_386_SUB32",
+	bfd_i386_elf_reloc_nonelf, "R_386_SUB32",
 	TRUE, 0xffffffff, 0xffffffff, FALSE),
 
   /* Yet another gap.  */
@@ -197,17 +184,18 @@ static reloc_howto_type elf_howto_table[]=
   HOWTO(R_386_RELSEG16, 0, 1, 16, FALSE, 0, complain_overflow_dont,
 	bfd_i386_elf_relseg16_reloc, "R_386_RELSEG16",
 	TRUE, 0xffff, 0xffff, FALSE),
+  /* Experimental but old-style IA16 relocations.  */
   HOWTO(R_386_OZSUB16, 0, 1, 16, FALSE, 0, complain_overflow_dont,
-	bfd_i386_elf_ozxx16_reloc, "R_386_OZSUB16",
+	bfd_i386_elf_reloc_nonelf, "R_386_OZSUB16",
 	TRUE, 0xffff, 0xffff, FALSE),
   HOWTO(R_386_OZSUB32, 0, 2, 32, FALSE, 0, complain_overflow_bitfield,
-	bfd_i386_elf_ozxx32_reloc, "R_386_OZSUB32",
+	bfd_i386_elf_reloc_nonelf, "R_386_OZSUB32",
 	TRUE, 0xffffffff, 0xffffffff, FALSE),
   HOWTO(R_386_OZ16, 0, 1, 16, FALSE, 0, complain_overflow_dont,
-	bfd_i386_elf_ozxx16_reloc, "R_386_OZ16",
+	bfd_i386_elf_reloc_nonelf, "R_386_OZ16",
 	TRUE, 0xffff, 0xffff, FALSE),
   HOWTO(R_386_OZ32, 0, 2, 32, FALSE, 0, complain_overflow_bitfield,
-	bfd_i386_elf_ozxx32_reloc, "R_386_OZ32",
+	bfd_i386_elf_reloc_nonelf, "R_386_OZ32",
 	TRUE, 0xffffffff, 0xffffffff, FALSE),
 
   /* And another gap.  */
@@ -252,87 +240,26 @@ static reloc_howto_type elf_howto_table[]=
 
 #define X86_SIZE_TYPE_P(TYPE) ((TYPE) == R_386_SIZE32)
 
-/* Either install or perform an R_386_SUB16 relocation (experimental).  */
+/* Either install an R_386_SUB16, R_386_SUB32, R_386_OZSUB16, R_386_OZSUB32,
+   R_386_OZ16, or R_386_OZ32 relocation; or fail if we are trying to actually
+   perform such a relocation.  */
 static bfd_reloc_status_type
-bfd_i386_elf_sub16_reloc (bfd *abfd, arelent *reloc_entry, asymbol *symbol,
-			  void *data ATTRIBUTE_UNUSED,
-			  asection *input_section, bfd *output_bfd,
-			  char **error_message ATTRIBUTE_UNUSED)
+bfd_i386_elf_reloc_nonelf (bfd *abfd ATTRIBUTE_UNUSED, arelent *reloc_entry,
+			   asymbol *symbol ATTRIBUTE_UNUSED,
+			   void *data ATTRIBUTE_UNUSED,
+			   asection *input_section, bfd *output_bfd,
+			   char **error_message ATTRIBUTE_UNUSED)
 {
-  bfd_vma value;
-  asection *sec;
-  struct reloc_howto_struct howto_modified;
-
   if (output_bfd)
     {
       reloc_entry->address += input_section->output_offset;
       return bfd_reloc_ok;
     }
 
-  if (reloc_entry->address + 2 < (bfd_vma) 2
-      || reloc_entry->address + 2
-	 > bfd_get_section_limit (abfd, input_section))
-    return bfd_reloc_outofrange;
-
-  sec = symbol->section;
-  if (bfd_is_abs_section (sec))
-    value = symbol->value;
-  else if (bfd_is_const_section (sec) || ! sec->output_section)
-    {
-      /* xgettext:c-format */
-      _bfd_error_handler (_("%pB: R_386_SUB16 for symbol with \
-no output section"), output_bfd);
-      return bfd_reloc_undefined;
-    }
-  else
-    value = sec->output_section->vma + sec->output_offset + symbol->value;
-  value += reloc_entry->addend;
-  value = -value;
-
-  howto_modified = elf_howto_table[R_386_16 - R_386_ext_offset];
-  howto_modified.complain_on_overflow = complain_overflow_dont;
-  return _bfd_relocate_contents (&howto_modified, abfd, value,
-				 (bfd_byte *) data + reloc_entry->address);
-}
-
-/* Either install or perform an R_386_SUB32 relocation (experimental).  */
-static bfd_reloc_status_type
-bfd_i386_elf_sub32_reloc (bfd *abfd, arelent *reloc_entry, asymbol *symbol,
-			  void *data ATTRIBUTE_UNUSED,
-			  asection *input_section, bfd *output_bfd,
-			  char **error_message ATTRIBUTE_UNUSED)
-{
-  bfd_vma value;
-  asection *sec;
-
-  if (output_bfd)
-    {
-      reloc_entry->address += input_section->output_offset;
-      return bfd_reloc_ok;
-    }
-
-  if (reloc_entry->address + 4 < (bfd_vma) 4
-      || reloc_entry->address + 4
-	 > bfd_get_section_limit (abfd, input_section))
-    return bfd_reloc_outofrange;
-
-  sec = symbol->section;
-  if (bfd_is_abs_section (sec))
-    value = symbol->value;
-  else if (bfd_is_const_section (sec) || ! sec->output_section)
-    {
-      /* xgettext:c-format */
-      _bfd_error_handler (_("%pB: R_386_SUB32 for symbol with \
-no output section"), output_bfd);
-      return bfd_reloc_undefined;
-    }
-  else
-    value = sec->output_section->vma + sec->output_offset + symbol->value;
-  value += reloc_entry->addend;
-  value = -value;
-
-  return _bfd_relocate_contents (&elf_howto_table[R_386_32], abfd, value,
-				 (bfd_byte *) data + reloc_entry->address);
+  /* xgettext:c-format */
+  _bfd_error_handler (_("%pB: %s relocation not supported when output is \
+non-ELF"), abfd, reloc_entry->howto->name);
+  return bfd_reloc_notsupported;
 }
 
 /* This function, bfd_i386_elf_get_paragraph_distance (...), bfd_i386_elf_
@@ -482,107 +409,6 @@ bfd_i386_elf_relseg16_reloc (bfd *abfd, arelent *reloc_entry, asymbol *symbol,
 
   return _bfd_relocate_contents (&elf_howto_table[R_386_16 - R_386_ext_offset],
     abfd, paras, (bfd_byte *) data + reloc_entry->address);
-}
-
-/* Either install or perform an R_386_OZSUB16 or R_386_OZ16 relocation
-   (experimental).  */
-static bfd_reloc_status_type
-bfd_i386_elf_ozxx16_reloc (bfd *abfd, arelent *reloc_entry, asymbol *symbol,
-			   void *data ATTRIBUTE_UNUSED,
-			   asection *input_section, bfd *output_bfd,
-			   char **error_message ATTRIBUTE_UNUSED)
-{
-  bfd_vma value, begin;
-  asection *sec;
-  struct reloc_howto_struct howto_modified;
-
-  if (output_bfd)
-    {
-      reloc_entry->address += input_section->output_offset;
-      return bfd_reloc_ok;
-    }
-
-  if (reloc_entry->address + 2 < (bfd_vma) 2
-      || reloc_entry->address + 2
-	 > bfd_get_section_limit (abfd, input_section))
-    return bfd_reloc_outofrange;
-
-  sec = symbol->section;
-  if (bfd_is_abs_section (sec))
-    value = 0;
-  else if (bfd_is_const_section (sec) || ! sec->output_section)
-    {
-      /* xgettext:c-format */
-      _bfd_error_handler (_("%pB: R_386_OZSUB16 or R_386_OZ16 for symbol with \
-no output section"), output_bfd);
-      return bfd_reloc_undefined;
-    }
-  else
-    {
-      sec = sec->output_section;
-      if (! bfd_i386_elf_get_true_load_begin (sec->owner, &begin))
-	return bfd_reloc_other;
-      value = sec->lma - sec->vma - begin;
-    }
-
-  if (reloc_entry->howto->type == R_386_OZSUB16)
-    value = -value;
-
-  value += bfd_i386_warn_nonzero_addend (reloc_entry, abfd);
-
-  howto_modified = elf_howto_table[R_386_16 - R_386_ext_offset];
-  howto_modified.complain_on_overflow = complain_overflow_dont;
-  return _bfd_relocate_contents (&howto_modified, abfd, value,
-				 (bfd_byte *) data + reloc_entry->address);
-}
-
-/* Either install or perform an R_386_OZSUB32 or R_386_OZ32 relocation
-   (experimental).  */
-static bfd_reloc_status_type
-bfd_i386_elf_ozxx32_reloc (bfd *abfd, arelent *reloc_entry, asymbol *symbol,
-			   void *data ATTRIBUTE_UNUSED,
-			   asection *input_section, bfd *output_bfd,
-			   char **error_message ATTRIBUTE_UNUSED)
-{
-  bfd_vma value, begin;
-  asection *sec;
-
-  if (output_bfd)
-    {
-      reloc_entry->address += input_section->output_offset;
-      return bfd_reloc_ok;
-    }
-
-  if (reloc_entry->address + 4 < (bfd_vma) 4
-      || reloc_entry->address + 4
-	 > bfd_get_section_limit (abfd, input_section))
-    return bfd_reloc_outofrange;
-
-  sec = symbol->section;
-  if (bfd_is_abs_section (sec))
-    value = 0;
-  else if (bfd_is_const_section (sec) || ! sec->output_section)
-    {
-      /* xgettext:c-format */
-      _bfd_error_handler (_("%pB: R_386_OZSUB32 or R_386_OZ32 for symbol with \
-no output section"), output_bfd);
-      return bfd_reloc_undefined;
-    }
-  else
-    {
-      sec = sec->output_section;
-      if (! bfd_i386_elf_get_true_load_begin (sec->owner, &begin))
-	return bfd_reloc_other;
-      value = sec->lma - sec->vma - begin;
-    }
-
-  if (reloc_entry->howto->type == R_386_OZSUB32)
-    value = -value;
-
-  value += bfd_i386_warn_nonzero_addend (reloc_entry, abfd);
-
-  return _bfd_relocate_contents (&elf_howto_table[R_386_32], abfd, value,
-				 (bfd_byte *) data + reloc_entry->address);
 }
 
 #ifdef DEBUG_GEN_RELOC
