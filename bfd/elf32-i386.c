@@ -274,26 +274,28 @@ non-ELF"), abfd, reloc_entry->howto->name);
    base), we can subtract the section's VMA from its LMA.
 
    If the MZ header (or whatever executable header is in use) has its own
-   section, also subtract the LMA for the end of the header.  For now,
-   recognize
-     * the special ELF section type 0x8086006f (SHT_IA16_PROG_ORG), and
-     * the section names .ia16.hdr, .msdos_mz_hdr, and .hdr,
-   in that order.  (The last two are for compatibility with existing linker
-   scripts.)  -- tkchia */
+   section, also subtract the LMA (or VMA, for SHT_IA16_PROG_ORG_VADDR) for
+   the end of the header.  For now, recognize
+     * the special ELF section type 0x8086006f (SHT_IA16_PROG_ORG) or
+       0x8086016f (SHT_IA16_PROG_ORG_VADDR), and
+     * the section names .msdos_mz_hdr and .hdr,
+   in that order.  (The hard-coded section names are for compatibility with
+   existing linker scripts.)  -- tkchia */
 bfd_boolean
-bfd_i386_elf_get_true_prog_org (bfd *output_bfd, bfd_vma *begin)
+bfd_i386_elf_get_true_prog_org (bfd *output_bfd, bfd_vma *p_org)
 {
   asection *hdr_sec = NULL;
+  bfd_vma org = (bfd_vma) -1;
 
   if (CONST_STRNEQ (bfd_get_target (output_bfd), "elf32"))
     {
       asection *sec;
       for (sec = output_bfd->sections; sec; sec = sec->next)
 	{
-	  if (elf_section_data (sec)->this_hdr.sh_type == SHT_IA16_PROG_ORG)
+	  switch (elf_section_data (sec)->this_hdr.sh_type)
 	    {
-	      if (hdr_sec
-		  && hdr_sec->lma + hdr_sec->size != sec->lma + sec->size)
+	    case SHT_IA16_PROG_ORG:
+	      if (hdr_sec && org != sec->lma + sec->size)
 		{
 		  /* xgettext:c-format */
 		  _bfd_error_handler (_("%pB: conflicting IA-16 program \
@@ -302,29 +304,41 @@ origins from `%pA' and `%pA'"), output_bfd, hdr_sec, sec);
 		  return FALSE;
 		}
 	      hdr_sec = sec;
+	      org = sec->lma + sec->size;
+	      break;
+
+	    case SHT_IA16_PROG_ORG_VADDR:
+	      if (hdr_sec && org != sec->vma + sec->size)
+		{
+		  /* xgettext:c-format */
+		  _bfd_error_handler (_("%pB: conflicting IA-16 program \
+origins from `%pA' and `%pA'"), output_bfd, hdr_sec, sec);
+		  bfd_set_error (bfd_error_bad_value);
+		  return FALSE;
+		}
+	      hdr_sec = sec;
+	      org = sec->vma + sec->size;
+	      break;
 	    }
 	}
     }
 
   if (! hdr_sec)
     {
-      hdr_sec = bfd_get_section_by_name (output_bfd, ".ia16.hdr");
+      hdr_sec = bfd_get_section_by_name (output_bfd, ".msdos_mz_hdr");
       if (! hdr_sec)
 	{
-	  hdr_sec = bfd_get_section_by_name (output_bfd, ".msdos_mz_hdr");
+	  hdr_sec = bfd_get_section_by_name (output_bfd, ".hdr");
 	  if (! hdr_sec)
 	    {
-	      hdr_sec = bfd_get_section_by_name (output_bfd, ".hdr");
-	      if (! hdr_sec)
-		{
-		  *begin = 0;
-		  return TRUE;
-		}
+	      *p_org = 0;
+	      return TRUE;
 	    }
 	}
+      org = hdr_sec->lma + hdr_sec->size;
     }
 
-  *begin = hdr_sec->lma + hdr_sec->size;
+  *p_org = org;
   return TRUE;
 }
 
@@ -334,7 +348,7 @@ bfd_i386_elf_get_paragraph_distance (asection *input_section,
 {
   asection *output_section = input_section->output_section;
   bfd *output_bfd;
-  bfd_vma lma, vma, dist, begin;
+  bfd_vma lma, vma, dist, org;
 
   if (bfd_is_const_section (input_section) || ! output_section)
     {
@@ -359,10 +373,10 @@ unaligned section `%pA'"), output_bfd, output_section);
       return FALSE;
     }
 
-  if (! bfd_i386_elf_get_true_prog_org (output_bfd, &begin))
+  if (! bfd_i386_elf_get_true_prog_org (output_bfd, &org))
     return FALSE;
 
-  dist -= begin / 16;
+  dist -= org / 16;
   *distance = dist;
   return TRUE;
 }
@@ -2306,6 +2320,110 @@ elf_i386_tpoff (struct bfd_link_info *info, bfd_vma address)
   return static_tls_size + htab->tls_sec->vma - address;
 }
 
+static bfd_boolean
+elf_i386_set_ia16_backlink (bfd *obfd, asection *sec, asection *linked_sec)
+{
+  unsigned info_type = linked_sec->sec_info_type;
+
+  if (info_type != SEC_INFO_TYPE_NONE && info_type != SEC_INFO_TYPE_TARGET)
+    {
+      _bfd_error_handler (_("%pB: cannot associate `%pA' with `%pA' which is \
+itself special"), obfd, sec, linked_sec);
+      bfd_set_error (bfd_error_bad_value);
+      return FALSE;
+    }
+
+  if (info_type == SEC_INFO_TYPE_TARGET
+      && elf_section_data (linked_sec)->sec_info != NULL
+      && elf_section_data (linked_sec)->sec_info != linked_sec)
+    {
+      _bfd_error_handler (_("%pB: cannot associate `%pA' with `%pA', latter \
+already linked from `%pA'"), obfd, sec, linked_sec,
+			     elf_section_data (linked_sec)->sec_info);
+      bfd_set_error (bfd_error_bad_value);
+      return FALSE;
+    }
+
+  linked_sec->sec_info_type = SEC_INFO_TYPE_TARGET;
+  elf_section_data (linked_sec)->sec_info = sec;
+
+  return TRUE;
+}
+
+/* Precompute backlinks to SHT_IA16_SEC_OZ_VADDR sections.  */
+
+static bfd_boolean
+elf_i386_precompute_ia16_backlinks (bfd *obfd)
+{
+  Elf_Internal_Shdr **headers = elf_elfsections (obfd);
+  asection *sec, *linked_sec;
+
+  for (sec = obfd->sections; sec; sec = sec->next)
+    {
+      Elf_Internal_Shdr *shdr = &(elf_section_data (sec)->this_hdr);
+
+      if (shdr->sh_type != SHT_IA16_SEC_OZ_VADDR)
+	continue;
+
+      if (! elf_i386_set_ia16_backlink (obfd, sec, sec))
+	return FALSE;
+
+      if (shdr->sh_link > 0
+	  && shdr->sh_link < elf_numsections (obfd))
+	linked_sec = headers[shdr->sh_link]->bfd_section;
+      else
+	{
+	  size_t name_len = strlen (sec->name);
+	  char *linked_name;
+
+	  if (name_len == 0 || sec->name[name_len - 1] != '!')
+	    linked_sec = sec;
+	  else
+	    {
+	      linked_name = bfd_malloc (name_len + 1);
+	      if (! linked_name)
+		return FALSE;
+	      memcpy (linked_name, sec->name, name_len - 1);
+
+	      linked_name[name_len - 1] = '$';
+	      linked_sec = bfd_get_section_by_name (obfd, linked_name);
+	      if (! linked_sec)
+		{
+		  linked_name[name_len - 1] = 0;
+		  linked_sec = bfd_get_section_by_name (obfd, linked_name);
+		}
+	      free (linked_name);
+	    }
+	}
+
+      if (! linked_sec)
+	{
+	  _bfd_error_handler (_("%pB: cannot find section which `%pA' \
+is associated with"), obfd, sec);
+	  bfd_set_error (bfd_error_bad_value);
+	  return FALSE;
+	}
+
+      if (linked_sec != sec)
+	{
+	  if (elf_section_data (linked_sec)->this_hdr.sh_type
+	      == SHT_IA16_SEC_OZ_VADDR)
+	    {
+	      _bfd_error_handler (_("%pB: cannot associate one \
+SHT_IA16_SEC_OZ_VADDR section (`%pA') with another (`%pA')"), obfd, sec,
+							      linked_sec);
+	      bfd_set_error (bfd_error_bad_value);
+	      return FALSE;
+	    }
+
+	  if (! elf_i386_set_ia16_backlink (obfd, sec, linked_sec))
+	    return FALSE;
+	}
+    }
+
+  return TRUE;
+}
+
 /* Relocate an i386 ELF section.  */
 
 static bfd_boolean
@@ -3036,15 +3154,6 @@ disallow_got32:
 
 	case R_386_SEGMENT16:	/* see bfd_i386_elf_segment16_reloc above */
 	case R_386_RELSEG16:
-	  if (! sec
-	      || ! bfd_i386_elf_get_paragraph_distance (sec, &relocation))
-	    {
-	      bfd_set_error (bfd_error_bad_value);
-	      return FALSE;
-	    }
-	  unresolved_reloc = FALSE;
-	  break;
-
 	case R_386_OZSUB16:
 	case R_386_OZSUB32:
 	case R_386_OZ16:
@@ -3053,25 +3162,45 @@ disallow_got32:
 	    relocation = 0;
 	  else
 	    {
+	      asection *osec;
+
 	      if (! sec || bfd_is_const_section (sec) || ! sec->output_section)
 		{
 		  bfd_set_error (bfd_error_bad_value);
 		  return FALSE;
 		}
 
-	      if (ia16_prog_org == (bfd_vma) -1
-		  && ! bfd_i386_elf_get_true_prog_org (output_bfd,
-						       &ia16_prog_org))
+	      if (ia16_prog_org == (bfd_vma) -1)
 		{
-		  bfd_set_error (bfd_error_bad_value);
-		  return FALSE;
+		  if (! bfd_i386_elf_get_true_prog_org (output_bfd,
+							&ia16_prog_org)
+		      || ! elf_i386_precompute_ia16_backlinks (output_bfd))
+		    {
+		      bfd_set_error (bfd_error_bad_value);
+		      return FALSE;
+		    }
 		}
 
-	      relocation = sec->output_section->lma - sec->output_section->vma
-			   - ia16_prog_org;
+	      osec = sec->output_section;
+	      if (osec->sec_info_type == SEC_INFO_TYPE_TARGET)
+		{
+		  osec = (asection *) elf_section_data (osec)->sec_info;
+		  relocation = osec->vma - ia16_prog_org;
+		}
+	      else
+		relocation = osec->lma - osec->vma - ia16_prog_org;
 
-	      if (r_type == R_386_OZSUB16 || r_type == R_386_OZSUB32)
-		relocation = -relocation;
+	      switch (r_type)
+		{
+		case R_386_SEGMENT16:
+		case R_386_RELSEG16:
+		  relocation >>= 4;
+		  break;
+
+		case R_386_OZSUB16:
+		case R_386_OZSUB32:
+		  relocation = -relocation;
+		}
 	    }
 	  unresolved_reloc = FALSE;
 	  break;

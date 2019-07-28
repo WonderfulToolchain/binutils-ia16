@@ -532,7 +532,12 @@
 #define SHT_HIUSER	0xFFFFFFFF	/* New value, defined in Oct 4, 1999 Draft */
 
 /* Experimental section types for 16-bit x86 segment relocations.  */
-#define SHT_IA16_PROG_ORG 0x8086006F	/* True IA-16 program content start */
+#define SHT_IA16_PROG_ORG 0x8086006F	/* True IA-16 program content start
+					   via load (physical) address */
+#define SHT_IA16_PROG_ORG_VADDR 0x8086016F	/* True IA-16 program content
+						   start via virtual address */
+#define SHT_IA16_SEC_OZ_VADDR	0x8086017A	/* IA-16 offset 0 of linked
+						   (sh_link) section */
 
 /* Values for section header, sh_flags field.  */
 
