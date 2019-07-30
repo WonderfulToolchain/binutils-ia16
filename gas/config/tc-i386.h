@@ -472,7 +472,12 @@ extern offsetT x86_sframe_cfa_ra_offset (void);
 extern unsigned char x86_sframe_get_abi_arch (void);
 #define sframe_get_abi_arch x86_sframe_get_abi_arch
 
+extern int i386_elf_validate_fix_sub (struct fix *, segT);
+#define TC_VALIDATE_FIX_SUB i386_elf_validate_fix_sub
 #endif
+
+#define RELOC_EXPANSION_POSSIBLE 1
+#define MAX_RELOC_EXPANSION 2
 
 #ifdef TE_PE
 

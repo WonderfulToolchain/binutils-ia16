@@ -8692,7 +8692,7 @@ optimize_disp (const insn_template *t)
 			 i.op[op].disps, 0, i.reloc[op]);
 	    i.types[op] = operand_type_and_not (i.types[op], anydisp);
 	  }
- 	else
+	else
 	  /* We only support 64bit displacement on constants.  */
 	  i.types[op].bitfield.disp64 = 0;
       }
@@ -13569,7 +13569,7 @@ lex_got (enum bfd_reloc_code_real *rel ATTRIBUTE_UNUSED,
 			gotrel[j].str, 1 << (5 + object_64bit));
 		return NULL;
 	      }
- 
+
 	      *rel = gotrel[j].rel[object_64bit];
 	      if (adjust)
 		*adjust = len;
@@ -18362,6 +18362,21 @@ s_bss (int ignore ATTRIBUTE_UNUSED)
 
 #endif
 
+#if defined (OBJ_ELF) || defined (OBJ_MAYBE_ELF)
+int
+i386_elf_validate_fix_sub (fixS *fixp, segT seg)
+{
+  if (seg == reg_section)
+    return FALSE;
+
+  if (IS_ELF && !object_64bit)
+    return TRUE;
+
+  return fixp->fx_r_type == BFD_RELOC_GPREL32
+    || fixp->fx_r_type == BFD_RELOC_GPREL16;
+}
+#endif
+
 /* Remember constant directive.  */
 
 void
@@ -18474,11 +18489,14 @@ i386_validate_fix (fixS *fixp)
   return 1;
 }
 
-arelent *
+arelent **
 tc_gen_reloc (asection *section ATTRIBUTE_UNUSED, fixS *fixp)
 {
-  arelent *rel;
+  static arelent *relocs[MAX_RELOC_EXPANSION+1];
+  arelent *rel, **relp;
   bfd_reloc_code_real_type code;
+
+  relp = &relocs[0];
 
   switch (fixp->fx_r_type)
     {
@@ -18524,7 +18542,7 @@ tc_gen_reloc (asection *section ATTRIBUTE_UNUSED, fixS *fixp)
 	  fixp->fx_addsy = NULL;
 	  fixp->fx_subsy = NULL;
 	  md_apply_fix (fixp, (valueT *) &value, NULL);
-	  return NULL;
+	  return relocs;
 	}
       if (!fixp->fx_addsy || fixp->fx_subsy)
 	{
@@ -18651,7 +18669,7 @@ tc_gen_reloc (asection *section ATTRIBUTE_UNUSED, fixS *fixp)
       code = BFD_RELOC_X86_64_GOTPC64;
     }
 
-  rel = XNEW (arelent);
+  *relp++ = rel = XNEW (arelent);
   rel->sym_ptr_ptr = XNEW (asymbol *);
   *rel->sym_ptr_ptr = symbol_get_bfdsym (fixp->fx_addsy);
 
@@ -18734,7 +18752,33 @@ tc_gen_reloc (asection *section ATTRIBUTE_UNUSED, fixS *fixp)
       gas_assert (rel->howto != NULL);
     }
 
-  return rel;
+  if (fixp->fx_subsy)
+    {
+      switch (fixp->fx_size)
+	{
+	default:
+	  as_bad_where (fixp->fx_file, fixp->fx_line,
+			_("can not do %d byte subtraction relocation"),
+			fixp->fx_size);
+	  code = 0;
+	  break;
+	case 2: code = BFD_RELOC_386_SUB16; break;
+	case 4: code = BFD_RELOC_386_SUB32; break;
+	}
+
+      if (code)
+	{
+	  *relp++ = rel = XNEW (arelent);
+	  rel->sym_ptr_ptr = XNEW (asymbol *);
+	  *rel->sym_ptr_ptr = symbol_get_bfdsym (fixp->fx_subsy);
+	  rel->address = fixp->fx_frag->fr_address + fixp->fx_where;
+	  rel->howto = bfd_reloc_type_lookup (stdoutput, code);
+	  gas_assert (rel->howto != NULL);
+	}
+    }
+
+  *relp = NULL;
+  return relocs;
 }
 
 #include "tc-i386-intel.c"
