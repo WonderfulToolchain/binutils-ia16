@@ -64,6 +64,12 @@
 #endif
 #endif
 
+static inline bfd_boolean
+is_power_of_2(unsigned int val)
+{
+  return (val & (val - 1)) == 0;
+}
+
 /* Prefixes will be emitted in the order defined below.
    WAIT_PREFIX must be the first prefix since FWAIT is really is an
    instruction, and so must come before any prefixes.
@@ -9269,7 +9275,7 @@ x86_address_bytes (void)
 
 #if !(defined (OBJ_ELF) || defined (OBJ_MAYBE_ELF) || defined (OBJ_MACH_O)) \
     || defined (LEX_AT)
-# define lex_got(reloc, adjust, types) NULL
+# define lex_got(reloc, adjust, types, size) NULL
 #else
 /* Parse operands of the form
    <symbol>@GOTOFF+<nnn>
@@ -9283,7 +9289,8 @@ x86_address_bytes (void)
 static char *
 lex_got (enum bfd_reloc_code_real *rel,
 	 int *adjust,
-	 i386_operand_type *types)
+	 i386_operand_type *types,
+	 int size)
 {
   /* Some of the relocations depend on the size of what field is to
      be relocated.  But in our callers i386_immediate and i386_displacement
@@ -9294,64 +9301,71 @@ lex_got (enum bfd_reloc_code_real *rel,
     const char *str;
     int len;
     const enum bfd_reloc_code_real rel[2];
+    unsigned int sizemask;
     const i386_operand_type types64;
   } gotrel[] = {
 #if defined (OBJ_ELF) || defined (OBJ_MAYBE_ELF)
     { STRING_COMMA_LEN ("SIZE"),      { BFD_RELOC_SIZE32,
 					BFD_RELOC_SIZE32 },
-      OPERAND_TYPE_IMM32_64 },
+      4|8, OPERAND_TYPE_IMM32_64 },
+    { STRING_COMMA_LEN ("SEG"),      { BFD_RELOC_386_SEG16,
+				       0 /* not supported */ },
+      2, OPERAND_TYPE_IMM16 },
+# define FIRST_NEED_GOT_SYMBOL 2
+#else
+# define FIRST_NEED_GOT_SYMBOL 0
 #endif
     { STRING_COMMA_LEN ("PLTOFF"),   { _dummy_first_bfd_reloc_code_real,
 				       BFD_RELOC_X86_64_PLTOFF64 },
-      OPERAND_TYPE_IMM64 },
+      4|8, OPERAND_TYPE_IMM64 },
     { STRING_COMMA_LEN ("PLT"),      { BFD_RELOC_386_PLT32,
 				       BFD_RELOC_X86_64_PLT32    },
-      OPERAND_TYPE_IMM32_32S_DISP32 },
+      4|8, OPERAND_TYPE_IMM32_32S_DISP32 },
     { STRING_COMMA_LEN ("GOTPLT"),   { _dummy_first_bfd_reloc_code_real,
 				       BFD_RELOC_X86_64_GOTPLT64 },
-      OPERAND_TYPE_IMM64_DISP64 },
+      4|8, OPERAND_TYPE_IMM64_DISP64 },
     { STRING_COMMA_LEN ("GOTOFF"),   { BFD_RELOC_386_GOTOFF,
 				       BFD_RELOC_X86_64_GOTOFF64 },
-      OPERAND_TYPE_IMM64_DISP64 },
+      4|8, OPERAND_TYPE_IMM64_DISP64 },
     { STRING_COMMA_LEN ("GOTPCREL"), { _dummy_first_bfd_reloc_code_real,
 				       BFD_RELOC_X86_64_GOTPCREL },
-      OPERAND_TYPE_IMM32_32S_DISP32 },
+      4|8, OPERAND_TYPE_IMM32_32S_DISP32 },
     { STRING_COMMA_LEN ("TLSGD"),    { BFD_RELOC_386_TLS_GD,
 				       BFD_RELOC_X86_64_TLSGD    },
-      OPERAND_TYPE_IMM32_32S_DISP32 },
+      4|8, OPERAND_TYPE_IMM32_32S_DISP32 },
     { STRING_COMMA_LEN ("TLSLDM"),   { BFD_RELOC_386_TLS_LDM,
 				       _dummy_first_bfd_reloc_code_real },
-      OPERAND_TYPE_NONE },
+      4|8, OPERAND_TYPE_NONE },
     { STRING_COMMA_LEN ("TLSLD"),    { _dummy_first_bfd_reloc_code_real,
 				       BFD_RELOC_X86_64_TLSLD    },
-      OPERAND_TYPE_IMM32_32S_DISP32 },
+      4|8, OPERAND_TYPE_IMM32_32S_DISP32 },
     { STRING_COMMA_LEN ("GOTTPOFF"), { BFD_RELOC_386_TLS_IE_32,
 				       BFD_RELOC_X86_64_GOTTPOFF },
-      OPERAND_TYPE_IMM32_32S_DISP32 },
+      4|8, OPERAND_TYPE_IMM32_32S_DISP32 },
     { STRING_COMMA_LEN ("TPOFF"),    { BFD_RELOC_386_TLS_LE_32,
 				       BFD_RELOC_X86_64_TPOFF32  },
-      OPERAND_TYPE_IMM32_32S_64_DISP32_64 },
+      4|8, OPERAND_TYPE_IMM32_32S_64_DISP32_64 },
     { STRING_COMMA_LEN ("NTPOFF"),   { BFD_RELOC_386_TLS_LE,
 				       _dummy_first_bfd_reloc_code_real },
-      OPERAND_TYPE_NONE },
+      4|8, OPERAND_TYPE_NONE },
     { STRING_COMMA_LEN ("DTPOFF"),   { BFD_RELOC_386_TLS_LDO_32,
 				       BFD_RELOC_X86_64_DTPOFF32 },
-      OPERAND_TYPE_IMM32_32S_64_DISP32_64 },
+      4|8, OPERAND_TYPE_IMM32_32S_64_DISP32_64 },
     { STRING_COMMA_LEN ("GOTNTPOFF"),{ BFD_RELOC_386_TLS_GOTIE,
 				       _dummy_first_bfd_reloc_code_real },
-      OPERAND_TYPE_NONE },
+      4|8, OPERAND_TYPE_NONE },
     { STRING_COMMA_LEN ("INDNTPOFF"),{ BFD_RELOC_386_TLS_IE,
 				       _dummy_first_bfd_reloc_code_real },
-      OPERAND_TYPE_NONE },
+      4|8, OPERAND_TYPE_NONE },
     { STRING_COMMA_LEN ("GOT"),      { BFD_RELOC_386_GOT32,
 				       BFD_RELOC_X86_64_GOT32    },
-      OPERAND_TYPE_IMM32_32S_64_DISP32 },
+      4|8, OPERAND_TYPE_IMM32_32S_64_DISP32 },
     { STRING_COMMA_LEN ("TLSDESC"),  { BFD_RELOC_386_TLS_GOTDESC,
 				       BFD_RELOC_X86_64_GOTPC32_TLSDESC },
-      OPERAND_TYPE_IMM32_32S_DISP32 },
+      4|8, OPERAND_TYPE_IMM32_32S_DISP32 },
     { STRING_COMMA_LEN ("TLSCALL"),  { BFD_RELOC_386_TLS_DESC_CALL,
 				       BFD_RELOC_X86_64_TLSDESC_CALL },
-      OPERAND_TYPE_IMM32_32S_DISP32 },
+      4|8, OPERAND_TYPE_IMM32_32S_DISP32 },
   };
   char *cp;
   unsigned int j;
@@ -9360,6 +9374,11 @@ lex_got (enum bfd_reloc_code_real *rel,
   if (!IS_ELF)
     return NULL;
 #endif
+
+  if (size > 0 && !is_power_of_2(size))
+    size = 0;
+  else
+    size &= ~(object_64bit ? 0 : 8);
 
   for (cp = input_line_pointer; *cp != '@'; cp++)
     if (is_end_of_line[(unsigned char) *cp] || *cp == ',')
@@ -9375,20 +9394,32 @@ lex_got (enum bfd_reloc_code_real *rel,
 	      int first, second;
 	      char *tmpbuf, *past_reloc;
 
+	      if ((gotrel[j].sizemask & size) == 0) {
+		as_bad (_("invalid operand size for @%s reloc with %d-bit output format"),
+			gotrel[j].str, 1 << (5 + object_64bit));
+		return NULL;
+	      }
+
 	      *rel = gotrel[j].rel[object_64bit];
 
 	      if (types)
 		{
 		  if (flag_code != CODE_64BIT)
 		    {
-		      types->bitfield.imm32 = 1;
-		      types->bitfield.disp32 = 1;
+		      if (gotrel[j].sizemask & 2) {
+			types->bitfield.imm16 = 1;
+			types->bitfield.disp16 = 1;
+		      }
+		      if (gotrel[j].sizemask & 4) {
+			types->bitfield.imm32 = 1;
+			types->bitfield.disp32 = 1;
+		      }
 		    }
 		  else
 		    *types = gotrel[j].types64;
 		}
 
-	      if (j != 0 && GOT_symbol == NULL)
+	      if (j >= FIRST_NEED_GOT_SYMBOL && GOT_symbol == NULL)
 		GOT_symbol = symbol_find_or_make (GLOBAL_OFFSET_TABLE_NAME);
 
 	      /* The length of the first part of our input line.  */
@@ -9450,24 +9481,31 @@ lex_got (enum bfd_reloc_code_real *rel,
 static char *
 lex_got (enum bfd_reloc_code_real *rel ATTRIBUTE_UNUSED,
 	 int *adjust ATTRIBUTE_UNUSED,
-	 i386_operand_type *types)
+	i386_operand_type *types,
+	 int size)
 {
   static const struct
   {
     const char *str;
     int len;
     const enum bfd_reloc_code_real rel[2];
+    unsigned int sizemask;
     const i386_operand_type types64;
   }
   gotrel[] =
   {
     { STRING_COMMA_LEN ("SECREL32"),    { BFD_RELOC_32_SECREL,
 					  BFD_RELOC_32_SECREL },
-      OPERAND_TYPE_IMM32_32S_64_DISP32_64 },
+      4|8, OPERAND_TYPE_IMM32_32S_64_DISP32_64 },
   };
 
   char *cp;
   unsigned j;
+
+  if (size > 0 && !is_power_of_2(size))
+    size = 0;
+  else
+    size &= ~(object_64bit ? 0 : 8);
 
   for (cp = input_line_pointer; *cp != '@'; cp++)
     if (is_end_of_line[(unsigned char) *cp] || *cp == ',')
@@ -9484,6 +9522,12 @@ lex_got (enum bfd_reloc_code_real *rel ATTRIBUTE_UNUSED,
 	      int first, second;
 	      char *tmpbuf, *past_reloc;
 
+	      if ((gotrel[j].sizemask & size) == 0) {
+		as_bad (_("invalid operand size for @%s reloc with %d-bit output format"),
+			gotrel[j].str, 1 << (5 + object_64bit));
+		return NULL;
+	      }
+ 
 	      *rel = gotrel[j].rel[object_64bit];
 	      if (adjust)
 		*adjust = len;
@@ -9492,8 +9536,14 @@ lex_got (enum bfd_reloc_code_real *rel ATTRIBUTE_UNUSED,
 		{
 		  if (flag_code != CODE_64BIT)
 		    {
-		      types->bitfield.imm32 = 1;
-		      types->bitfield.disp32 = 1;
+		      if (gotrel[j].sizemask & 2) {
+			types->bitfield.imm16 = 1;
+			types->bitfield.disp16 = 1;
+		      }
+		      if (gotrel[j].sizemask & 4) {
+			types->bitfield.imm32 = 1;
+			types->bitfield.disp32 = 1;
+		      }
 		    }
 		  else
 		    *types = gotrel[j].types64;
@@ -9543,53 +9593,48 @@ x86_cons (expressionS *exp, int size)
   intel_syntax = -intel_syntax;
 
   exp->X_md = 0;
-  if (size == 4 || (object_64bit && size == 8))
+  /* Handle @GOTOFF and the like in an expression.  */
+  char *save;
+  char *gotfree_input_line;
+  int adjust = 0;
+
+  save = input_line_pointer;
+  gotfree_input_line = lex_got (&got_reloc, &adjust, NULL, size);
+  if (gotfree_input_line)
+    input_line_pointer = gotfree_input_line;
+
+  expression (exp);
+
+  if (gotfree_input_line)
     {
-      /* Handle @GOTOFF and the like in an expression.  */
-      char *save;
-      char *gotfree_input_line;
-      int adjust = 0;
-
-      save = input_line_pointer;
-      gotfree_input_line = lex_got (&got_reloc, &adjust, NULL);
-      if (gotfree_input_line)
-	input_line_pointer = gotfree_input_line;
-
-      expression (exp);
-
-      if (gotfree_input_line)
+      /* expression () has merrily parsed up to the end of line,
+	 or a comma - in the wrong buffer.  Transfer how far
+	 input_line_pointer has moved to the right buffer.  */
+      input_line_pointer = (save
+			    + (input_line_pointer - gotfree_input_line)
+			    + adjust);
+      free (gotfree_input_line);
+      if (exp->X_op == O_constant
+	  || exp->X_op == O_absent
+	  || exp->X_op == O_illegal
+	  || exp->X_op == O_register
+	  || exp->X_op == O_big)
 	{
-	  /* expression () has merrily parsed up to the end of line,
-	     or a comma - in the wrong buffer.  Transfer how far
-	     input_line_pointer has moved to the right buffer.  */
-	  input_line_pointer = (save
-				+ (input_line_pointer - gotfree_input_line)
-				+ adjust);
-	  free (gotfree_input_line);
-	  if (exp->X_op == O_constant
-	      || exp->X_op == O_absent
-	      || exp->X_op == O_illegal
-	      || exp->X_op == O_register
-	      || exp->X_op == O_big)
-	    {
-	      char c = *input_line_pointer;
-	      *input_line_pointer = 0;
-	      as_bad (_("missing or invalid expression `%s'"), save);
-	      *input_line_pointer = c;
-	    }
-	  else if ((got_reloc == BFD_RELOC_386_PLT32
-		    || got_reloc == BFD_RELOC_X86_64_PLT32)
-		   && exp->X_op != O_symbol)
-	    {
-	      char c = *input_line_pointer;
-	      *input_line_pointer = 0;
-	      as_bad (_("invalid PLT expression `%s'"), save);
-	      *input_line_pointer = c;
-	    }
+	  char c = *input_line_pointer;
+	  *input_line_pointer = 0;
+	  as_bad (_("missing or invalid expression `%s'"), save);
+	  *input_line_pointer = c;
+	}
+      else if ((got_reloc == BFD_RELOC_386_PLT32
+		|| got_reloc == BFD_RELOC_X86_64_PLT32)
+	       && exp->X_op != O_symbol)
+	{
+	  char c = *input_line_pointer;
+	  *input_line_pointer = 0;
+	  as_bad (_("invalid PLT expression `%s'"), save);
+	  *input_line_pointer = c;
 	}
     }
-  else
-    expression (exp);
 
   intel_syntax = -intel_syntax;
 
@@ -9807,7 +9852,7 @@ i386_immediate (char *imm_start)
   save_input_line_pointer = input_line_pointer;
   input_line_pointer = imm_start;
 
-  gotfree_input_line = lex_got (&i.reloc[this_operand], NULL, &types);
+  gotfree_input_line = lex_got (&i.reloc[this_operand], NULL, &types, -1);
   if (gotfree_input_line)
     input_line_pointer = gotfree_input_line;
 
@@ -10085,7 +10130,7 @@ i386_displacement (char *disp_start, char *disp_end)
       *displacement_string_end = '0';
     }
 #endif
-  gotfree_input_line = lex_got (&i.reloc[this_operand], NULL, &types);
+  gotfree_input_line = lex_got (&i.reloc[this_operand], NULL, &types, -1);
   if (gotfree_input_line)
     input_line_pointer = gotfree_input_line;
 
