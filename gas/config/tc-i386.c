@@ -560,6 +560,9 @@ static int use_rela_relocations = 0;
 enum x86_elf_abi
 {
   I386_ABI,
+#if defined (OBJ_ELF) || defined (OBJ_MAYBE_ELF)
+  I386_SEGELF_ABI,
+#endif
   X86_64_ABI,
   X86_64_X32_ABI
 };
@@ -2811,7 +2814,7 @@ i386_mach (void)
       else
 	return bfd_mach_x64_32;
     }
-  else if (!strcmp (default_arch, "i386")
+  else if (!strncmp (default_arch, "i386", 4)
 	   || !strcmp (default_arch, "iamcu"))
     {
       if (cpu_arch_isa == PROCESSOR_IAMCU)
@@ -10958,6 +10961,7 @@ const char *md_shortopts = "qnO::";
 #define OPTION_MFENCE_AS_LOCK_ADD (OPTION_MD_BASE + 24)
 #define OPTION_X86_USED_NOTE (OPTION_MD_BASE + 25)
 #define OPTION_MVEXWIG (OPTION_MD_BASE + 26)
+#define OPTION_32_SEGELF (OPTION_MD_BASE + 27)
 
 struct option md_longopts[] =
 {
@@ -10967,6 +10971,7 @@ struct option md_longopts[] =
   {"64", no_argument, NULL, OPTION_64},
 #endif
 #if defined (OBJ_ELF) || defined (OBJ_MAYBE_ELF)
+  {"32-segelf", no_argument, NULL, OPTION_32_SEGELF},
   {"x32", no_argument, NULL, OPTION_X32},
   {"mshared", no_argument, NULL, OPTION_MSHARED},
   {"mx86-used-note", required_argument, NULL, OPTION_X86_USED_NOTE},
@@ -11093,6 +11098,10 @@ md_parse_option (int c, const char *arg)
 	}
       else
 	as_fatal (_("32bit x86_64 is only supported for ELF"));
+      break;
+
+    case OPTION_32_SEGELF:
+      default_arch = "i386:segelf";
       break;
 #endif
 
@@ -11537,6 +11546,10 @@ md_show_usage (FILE *stream)
   fprintf (stream, _("\
   --32/--64/--x32         generate 32bit/64bit/x32 code\n"));
 #endif
+#if defined (OBJ_ELF) || defined (OBJ_MAYBE_ELF)
+  fprintf (stream, _("\
+  --32-segelf             generate 32bit code, use IA-16 segmentation ABI\n"));
+#endif
 #ifdef SVR4_COMMENT_CHARS
   fprintf (stream, _("\
   --divide                do not treat `/' as a comment character\n"));
@@ -11653,8 +11666,12 @@ i386_target_format (void)
       else
 	x86_elf_abi = X86_64_X32_ABI;
     }
-  else if (!strcmp (default_arch, "i386"))
-    update_code_flag (CODE_32BIT, 1);
+  else if (!strncmp (default_arch, "i386", 4))
+    {
+      update_code_flag (CODE_32BIT, 1);
+      if (default_arch[4] != 0)
+	x86_elf_abi = I386_SEGELF_ABI;
+    }
   else if (!strcmp (default_arch, "iamcu"))
     {
       update_code_flag (CODE_32BIT, 1);
@@ -11741,7 +11758,7 @@ i386_target_format (void)
 	  }
 	else if (cpu_arch_isa == PROCESSOR_IAMCU)
 	  {
-	    if (x86_elf_abi != I386_ABI)
+	    if (x86_elf_abi != I386_ABI && x86_elf_abi != I386_SEGELF_ABI)
 	      as_fatal (_("Intel MCU is 32bit only"));
 	    return ELF_TARGET_IAMCU_FORMAT;
 	  }
@@ -11893,6 +11910,30 @@ i386_validate_fix (fixS *fixp)
     }
 #endif
 }
+
+#if defined (OBJ_ELF) || defined (OBJ_MAYBE_ELF)
+static symbolS *
+i386_elf_find_segelf_base_symbol (symbolS *symbolP)
+{
+  const char *name = S_GET_NAME (symbolP);
+  size_t name_len = strlen (name);
+  char *base_name;
+  symbolS *baseP;
+
+  if (name_len != 0 && name[name_len - 1] == '!')
+    return symbolP;
+
+  base_name = xmalloc (strlen (name) + 2);
+  memcpy (base_name, name, name_len);
+  base_name[name_len] = '!';
+  base_name[name_len + 1] = 0;
+
+  baseP = symbol_find_or_make (base_name);
+  free (base_name);
+
+  return baseP;
+}
+#endif
 
 arelent **
 tc_gen_reloc (asection *section ATTRIBUTE_UNUSED, fixS *fixp)
@@ -12120,6 +12161,33 @@ tc_gen_reloc (asection *section ATTRIBUTE_UNUSED, fixS *fixp)
       gas_assert (rel->howto != NULL);
     }
 
+#if defined (OBJ_ELF) || defined (OBJ_MAYBE_ELF)
+  if (x86_elf_abi == I386_SEGELF_ABI && ! fixp->fx_pcrel)
+    {
+      switch (fixp->fx_size)
+	{
+	default:
+	  code = 0;
+	  break;
+	case 2: code = BFD_RELOC_386_SUB16; break;
+	case 4: code = BFD_RELOC_386_SUB32; break;
+	}
+
+      if (code)
+	{
+	  symbolS *baseP = i386_elf_find_segelf_base_symbol (fixp->fx_addsy);
+	  if (baseP)
+	    {
+	      *relp++ = rel = XNEW (arelent);
+	      rel->sym_ptr_ptr = XNEW (asymbol *);
+	      *rel->sym_ptr_ptr = symbol_get_bfdsym (baseP);
+	      rel->address = fixp->fx_frag->fr_address + fixp->fx_where;
+	      rel->howto = bfd_reloc_type_lookup (stdoutput, code);
+	      gas_assert (rel->howto != NULL);
+	    }
+	}
+    }
+
   if (fixp->fx_subsy)
     {
       switch (fixp->fx_size)
@@ -12144,6 +12212,7 @@ tc_gen_reloc (asection *section ATTRIBUTE_UNUSED, fixS *fixp)
 	  gas_assert (rel->howto != NULL);
 	}
     }
+#endif
 
   *relp = NULL;
   return relocs;
