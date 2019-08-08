@@ -41,10 +41,11 @@ static bfd_vma num_mz_reloc_sections = 0;
 static void
 i386_mz_after_open (void)
 {
-  /* For each input file, check if it uses any R_386_OZSEG16 relocations.
-     If it does, add a .msdos_mz_reloc.* section to it, with the right size.
+  /* For each input file, check if it uses any R_386_{SEG, OZSEG}16
+     relocations.  If it does, add a .msdos_mz_reloc.* section to it, with
+     the right size.
 
-     Try not to waste memory on sections with no R_386_OZSEG16
+     Try not to waste memory on sections with no R_386_{SEG, OZSEG}16
      relocations.  -- tkchia  */
   size_t num_new_secs = 0, new_secs_top = 0;
   asection **new_secs = NULL;
@@ -85,6 +86,7 @@ i386_mz_after_open (void)
 		{
 		  switch (ELF32_R_TYPE (irel->r_info))
 		    {
+		    case R_386_SEG16:
 		    case R_386_OZSEG16:
 		      if (num_mz >= 0xffffu)
 			{
@@ -240,7 +242,8 @@ gld${EMULATION_NAME}_finish (void)
 	      if (hdr_sec->lma % 16 != 0 || hdr_sec->size % 16 != 0)
 		{
 		  /* xgettext:c-format */
-		  einfo (_("%P: R_386_OZSEG16 with unaligned MZ header\n"));
+		  einfo (_("%P: R_386_SEG16 or R_386_OZSEG16 with \
+unaligned MZ header\n"));
 		  bfd_set_error (bfd_error_bad_value);
 		  break;
 		}
@@ -275,10 +278,23 @@ gld${EMULATION_NAME}_finish (void)
 		{
 		  long r_info = irel->r_info;
 		  long r_type = ELF32_R_TYPE (r_info);
-		  if (r_type == R_386_OZSEG16)
+		  bfd_vma osvma = osec->vma, oslma,
+			  relpvma = osvma + sec->output_offset
+				    + irel->r_offset;
+
+		  switch (r_type)
 		    {
-		      bfd_vma olma = osec->lma, ovma = osec->vma;
-		      if (olma % 16 != ovma % 16)
+		    case R_386_SEG16:
+		      bfd_put_16 (ibfd, relpvma & 0xf,
+				  mz_section->contents + 4 * reloc_idx);
+		      bfd_put_16 (ibfd, relpvma >> 4,
+				  mz_section->contents + 4 * reloc_idx + 2);
+		      ++reloc_idx;
+		      break;
+
+		    case R_386_OZSEG16:
+		      oslma = osec->lma;
+		      if (oslma % 16 != osvma % 16)
 			{
 			  /* xgettext:c-format */
 			  einfo (_("%P: R_386_OZSEG16 with \
@@ -286,10 +302,9 @@ unaligned output section\n"));
 			  bfd_set_error (bfd_error_bad_value);
 			  break;
 			}
-		      bfd_put_16 (ibfd,
-				  ovma + sec->output_offset + irel->r_offset,
+		      bfd_put_16 (ibfd, relpvma,
 				  mz_section->contents + 4 * reloc_idx);
-		      bfd_put_16 (ibfd, (olma - ovma) / 16 - subtrahend,
+		      bfd_put_16 (ibfd, (oslma - osvma) / 16 - subtrahend,
 				  mz_section->contents + 4 * reloc_idx + 2);
 		      ++reloc_idx;
 		    }
