@@ -216,6 +216,34 @@ MZ relocations\n"));
   gld${EMULATION_NAME}_before_allocation ();
 }
 
+/* Fashion an MZ relocation entry from a segment base address (_not_ a
+   paragraph count!) and an offset.  Try to hew as close as possible to the
+   original section semantics when crafting the entry.  */
+static uint32_t
+i386_mz_reloc_entry (bfd_vma seg_base, bfd_vma off)
+{
+  uint32_t seg;
+
+  if (seg_base % 16u != 0)
+      off += seg_base % 16u;
+
+  seg = seg_base >> 4;
+
+  if (off > 0xffffu)
+    {
+      seg += off >> 16 << 12;
+      off &= 0xffffu;
+    }
+
+  while (off > 0xfffeu)
+    {
+      ++seg;
+      off -= 16;
+    }
+
+  return seg << 16 | off;
+}
+
 static void
 gld${EMULATION_NAME}_finish (void)
 {
@@ -248,7 +276,7 @@ unaligned MZ header\n"));
 		  break;
 		}
 
-	      subtrahend = hdr_sec->lma / 16 + hdr_sec->size / 16;
+	      subtrahend = hdr_sec->lma + hdr_sec->size;
 	    }
 
 	  for (sec = ibfd->sections; sec; sec = sec->next)
@@ -278,17 +306,16 @@ unaligned MZ header\n"));
 		{
 		  long r_info = irel->r_info;
 		  long r_type = ELF32_R_TYPE (r_info);
-		  bfd_vma osvma = osec->vma, oslma,
-			  relpvma = osvma + sec->output_offset
-				    + irel->r_offset;
+		  bfd_vma osvma = osec->vma, oslma;
+		  uint32_t mz;
 
 		  switch (r_type)
 		    {
 		    case R_386_SEG16:
-		      bfd_put_16 (ibfd, relpvma & 0xf,
+		      mz = i386_mz_reloc_entry
+			     (osvma, sec->output_offset + irel->r_offset);
+		      bfd_put_32 (ibfd, mz,
 				  mz_section->contents + 4 * reloc_idx);
-		      bfd_put_16 (ibfd, relpvma >> 4,
-				  mz_section->contents + 4 * reloc_idx + 2);
 		      ++reloc_idx;
 		      break;
 
@@ -302,10 +329,11 @@ unaligned output section\n"));
 			  bfd_set_error (bfd_error_bad_value);
 			  break;
 			}
-		      bfd_put_16 (ibfd, relpvma,
+		      mz = i386_mz_reloc_entry (oslma - osvma - subtrahend,
+						osvma + sec->output_offset
+						+ irel->r_offset);
+		      bfd_put_32 (ibfd, mz,
 				  mz_section->contents + 4 * reloc_idx);
-		      bfd_put_16 (ibfd, (oslma - osvma) / 16 - subtrahend,
-				  mz_section->contents + 4 * reloc_idx + 2);
 		      ++reloc_idx;
 		    }
 		}
