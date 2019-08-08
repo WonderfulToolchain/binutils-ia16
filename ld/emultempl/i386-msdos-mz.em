@@ -173,6 +173,48 @@ cont:
 }
 
 static void
+i386_mz_before_allocation (void)
+{
+  /* If we still do not have an .msdos_mz_hdr output section even when we
+     are about to size up the output sections, then discard or blank out
+     the .msdos_mz_reloc.* "input" sections we created earlier.  */
+  if (num_mz_reloc_sections
+      && ! bfd_get_section_by_name (link_info.output_bfd, ".msdos_mz_hdr"))
+    {
+      asection **mz_secs = mz_reloc_sections,
+	       **mz_secs_end = mz_reloc_sections + num_mz_reloc_sections,
+	       **pmzs;
+
+      einfo (_("%P: warning: no .msdos_mz_hdr; not emitting \
+MZ relocations\n"));
+
+      for (pmzs = mz_secs; pmzs != mz_secs_end; ++pmzs)
+	{
+	  asection *mzs = *pmzs;
+
+	  /* Try to treat the input section as /DISCARD/-ed.  If that does
+	     not work, zero the section size.  */
+	  if (! mzs->output_section)
+	    mzs->output_section = bfd_abs_section_ptr;
+	  else if (mzs->output_section == bfd_abs_section_ptr)
+	    ;
+	  else if (! bfd_set_section_size (mzs->owner, mzs, 0))
+	    {
+	      einfo (_("%P: cannot discard MZ relocation section %s\n"),
+		     bfd_get_section_name (mzs->owner, mzs));
+	      bfd_set_error (bfd_error_invalid_operation);
+	    }
+	}
+
+      XDELETEVEC (mz_secs);
+      mz_reloc_sections = NULL;
+      num_mz_reloc_sections = 0;
+    }
+
+  gld${EMULATION_NAME}_before_allocation ();
+}
+
+static void
 gld${EMULATION_NAME}_finish (void)
 {
   /* Fill the .msdos_mz_reloc.* sections we just created with the actual
@@ -198,8 +240,7 @@ gld${EMULATION_NAME}_finish (void)
 	      if (hdr_sec->lma % 16 != 0 || hdr_sec->size % 16 != 0)
 		{
 		  /* xgettext:c-format */
-		  einfo (_("%P: R_386_OZSEG16 with unaligned \
-MZ header\n"));
+		  einfo (_("%P: R_386_OZSEG16 with unaligned MZ header\n"));
 		  bfd_set_error (bfd_error_bad_value);
 		  break;
 		}
@@ -270,4 +311,5 @@ cont:
 EOF
 
 LDEMUL_AFTER_OPEN=i386_mz_after_open
+LDEMUL_BEFORE_ALLOCATION=i386_mz_before_allocation
 LDEMUL_FINISH=gld${EMULATION_NAME}_finish
