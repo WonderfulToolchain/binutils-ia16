@@ -18485,14 +18485,13 @@ i386_elf_find_segelf_aux_symbol (symbolS *symbolP, char which)
 	return symbolP;
 
       if (tail == ('!' ^ '~' ^ which))
-	return NULL;
-
+	--name_len;
       /*
        * Handle the special case where SYMBOLP is a section symbol.  We
        * cannot rely on section_symbol (.) to work correctly, since GAS
        * might still be constructing that very symbol at this point.
        */
-      if (! S_IS_EXTERNAL (symbolP) && S_GET_VALUE (symbolP) == 0)
+      else if (! S_IS_EXTERNAL (symbolP) && S_GET_VALUE (symbolP) == 0)
 	{
 	  segT seg = S_GET_SEGMENT (symbolP);
 	  if (seg != undefined_section
@@ -18538,27 +18537,27 @@ i386_elf_symbol_new_hook (symbolS *symbolP)
    * And, always create auxiliary sections for our current section.
    */
   auxP = i386_elf_find_segelf_aux_symbol (symbolP, '!');
-  if (auxP && auxP != symbolP)
-    {
-      seg = S_GET_SEGMENT (symbolP);
-      i386_elf_ensure_segelf_aux_seg (seg, '!');
-      if (seg != now_seg)
-	i386_elf_ensure_segelf_aux_seg (now_seg, '!');
-    }
+
+  if (! auxP || auxP == symbolP)
+    return;
+
+  seg = S_GET_SEGMENT (symbolP);
+  i386_elf_ensure_segelf_aux_seg (seg, '!');
+  if (seg != now_seg)
+    i386_elf_ensure_segelf_aux_seg (now_seg, '!');
 
   /*
    * FIXME: we do not really need `foo~' if `foo' will be externally
    * defined.
    */
   auxP = i386_elf_find_segelf_aux_symbol (symbolP, '~');
-  if (auxP && auxP != symbolP)
-    {
-      if (! seg)
-	seg = S_GET_SEGMENT (symbolP);
-      i386_elf_ensure_segelf_aux_seg (seg, '~');
-      if (seg != now_seg)
-	i386_elf_ensure_segelf_aux_seg (now_seg, '~');
-    }
+
+  if (! auxP || auxP == symbolP)
+    return;
+
+  i386_elf_ensure_segelf_aux_seg (seg, '~');
+  if (seg != now_seg)
+    i386_elf_ensure_segelf_aux_seg (now_seg, '~');
 }
 
 int
