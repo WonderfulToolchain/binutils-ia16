@@ -498,6 +498,7 @@ do
     i386_elf32_nacl_vec)	 tb="$tb elf32-i386.lo elfxx-x86.lo elf-ifunc.lo elf-nacl.lo elf-vxworks.lo elf32.lo $elf" ;;
     i386_elf32_sol2_vec)	 tb="$tb elf32-i386.lo elfxx-x86.lo elf-ifunc.lo elf-nacl.lo elf-vxworks.lo elf32.lo $elf" ;;
     i386_elf32_vxworks_vec)	 tb="$tb elf32-i386.lo elfxx-x86.lo elf-ifunc.lo elf-nacl.lo elf-vxworks.lo elf32.lo $elf" ;;
+    i386_elks_vec)		 tb="$tb i386elks.lo" ;;
     i386_mach_o_vec)		 tb="$tb mach-o-i386.lo" ;;
     i386_msdos_vec)		 tb="$tb i386msdos.lo" ;;
     i386_pe_vec)		 tb="$tb pe-i386.lo peigen.lo $coff" ;;

@@ -375,7 +375,7 @@ x86_64-*-nacl*)		targ_emul=elf32_x86_64_nacl
 			tdir_elf_i386_nacl=`echo ${targ_alias} | sed -e 's/x86_64/i386/'`
 			;;
 ia16-*-elf*)		targ_emul=elf_i386_msdos_mz
-			targ_extra_emuls="elf_i386 i386msdos"
+			targ_extra_emuls="elf_i386 i386elks i386msdos"
 			;;
 ia64-*-elf*)		targ_emul=elf64_ia64 ;;
 ia64-*-freebsd* | ia64-*-kfreebsd*-gnu)

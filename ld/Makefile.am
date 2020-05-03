@@ -310,6 +310,7 @@ ALL_EMULATION_SOURCES = \
 	ehppaobsd.c \
 	ei386beos.c \
 	ei386bsd.c \
+	ei386elks.c \
 	ei386go32.c \
 	ei386lynx.c \
 	ei386moss.c \
@@ -1393,6 +1394,9 @@ ei386beos.c: $(srcdir)/emulparams/i386beos.sh \
 
 ei386bsd.c: $(srcdir)/emulparams/i386bsd.sh \
   $(srcdir)/emultempl/generic.em $(srcdir)/scripttempl/aout.sc ${GEN_DEPENDS}
+
+ei386elks.c: $(srcdir)/emulparams/i386elks.sh \
+  $(srcdir)/emultempl/generic.em $(srcdir)/scripttempl/i386elks.sc ${GEN_DEPENDS}
 
 ei386go32.c: $(srcdir)/emulparams/i386go32.sh \
   $(srcdir)/emultempl/generic.em $(srcdir)/scripttempl/i386go32.sc \
