@@ -304,6 +304,7 @@ ALL_EMULATION_SOURCES = \
 	ei386aout.c \
 	ei386beos.c \
 	ei386bsd.c \
+	ei386elks.c \
 	ei386go32.c \
 	ei386lynx.c \
 	ei386moss.c \
