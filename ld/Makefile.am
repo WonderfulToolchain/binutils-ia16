@@ -305,6 +305,7 @@ ALL_EMULATION_SOURCES = \
 	ei386aout.c \
 	ei386beos.c \
 	ei386bsd.c \
+	ei386elks.c \
 	ei386go32.c \
 	ei386lynx.c \
 	ei386moss.c \
@@ -804,6 +805,7 @@ $(ALL_EMULATION_SOURCES) $(ALL_64_EMULATION_SOURCES): $(GEN_DEPENDS)
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ei386aout.Pc@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ei386beos.Pc@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ei386bsd.Pc@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ei386elks.Pc@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ei386go32.Pc@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ei386lynx.Pc@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ei386moss.Pc@am__quote@
