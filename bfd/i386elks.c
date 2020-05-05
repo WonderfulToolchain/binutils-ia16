@@ -42,7 +42,16 @@ struct elks_aout_header
   uint8_t a_total[4];			/* Total memory allocated (if separate
 					   I/D, for data and BSS). */
   uint8_t a_syms[4];			/* Symbol table size. */
+  /* The following fields are optional.  They are specified, but apparently
+     unused, in Minix. */
+  uint8_t a_trsize[4];			/* Length of text relocation info. */
+  uint8_t a_drsize[4];			/* Length of data relocation info. */
+  uint8_t a_tbase[4];			/* Text relocation base. */
+  uint8_t a_dbase[4];			/* Data relocation base. */
 };
+
+/* Minimum ELKS a.out header size. */
+#define ELKS_MIN_HDR_SIZE (offsetof (struct elks_aout_header, a_trsize))
 
 #define A_MAGIC0	((uint8_t) 0x01)
 #define A_MAGIC1	((uint8_t) 0x03)
@@ -78,22 +87,30 @@ elks_object_p (bfd *abfd)
 {
   struct elks_aout_header hdr;
   asection *section;
-  uint32_t hdr_len, text_size, data_size, bss_size;
+  bfd_size_type n_read;
+  uint32_t hdr_len, a_text, a_data, a_bss, a_syms, a_trsize = 0, a_drsize = 0,
+	   a_tbase = 0, a_dbase = 0;
 
-  if (bfd_seek (abfd, (file_ptr) 0, SEEK_SET) != 0
-      || bfd_bread (&hdr, (bfd_size_type) sizeof (hdr), abfd) < sizeof (hdr))
+  if (bfd_seek (abfd, (file_ptr) 0, SEEK_SET) != 0)
     {
       if (bfd_get_error () != bfd_error_system_call)
 	bfd_set_error (bfd_error_wrong_format);
       return NULL;
     }
 
-  /* For now, only accept separate I/D executables for the 8086 with simple
-     headers. */
+  n_read = bfd_bread (&hdr, (bfd_size_type) sizeof (hdr), abfd);
   hdr_len = hdr.a_hdrlen;
+  if (n_read < ELKS_MIN_HDR_SIZE || hdr_len > n_read)
+    {
+      if (bfd_get_error () != bfd_error_system_call)
+	bfd_set_error (bfd_error_wrong_format);
+      return NULL;
+    }
+
+  /* For now, only accept separate I/D executables for the 8086. */
   if (hdr.a_magic[0] != A_MAGIC0 || hdr.a_magic[1] != A_MAGIC1
       || hdr.a_unused != 0 || H_GET_16 (abfd, hdr.a_version) != 0
-      || hdr.a_cpu != A_I8086 || hdr_len != sizeof (hdr))
+      || hdr.a_cpu != A_I8086)
     {
       bfd_set_error (bfd_error_wrong_format);
       return NULL;
@@ -110,11 +127,54 @@ elks_object_p (bfd *abfd)
       return NULL;
     }
 
+  /* Check that the recorded header size makes sense.  Also read any extra
+     fields, if available, beyond the minimum. */
+  switch (hdr_len)
+    {
+    case sizeof (hdr):
+      a_tbase = H_GET_32 (abfd, hdr.a_tbase);
+      a_dbase = H_GET_32 (abfd, hdr.a_tbase);
+      /* fall through */
+
+    case offsetof (struct elks_aout_header, a_tbase):
+      a_trsize = H_GET_32 (abfd, hdr.a_trsize);
+      a_drsize = H_GET_32 (abfd, hdr.a_drsize);
+      /* fall through */
+
+    case ELKS_MIN_HDR_SIZE:
+      break;
+
+    default:
+      bfd_set_error (bfd_error_wrong_format);
+      return NULL;
+    }
+
+  a_text = H_GET_32 (abfd, hdr.a_text);
+  a_data = H_GET_32 (abfd, hdr.a_data);
+  a_bss = H_GET_32 (abfd, hdr.a_bss);
+  a_syms = H_GET_32 (abfd, hdr.a_syms);
+
+  if (a_tbase != 0 || a_dbase != 0 || a_trsize != 0 || a_drsize != 0)
+    {
+      bfd_set_error (bfd_error_wrong_format);
+      return NULL;
+    }
+
   if (!elks_mkobject (abfd))
     return NULL;
 
   abfd->flags = EXEC_P;
-  abfd->start_address = H_GET_32 (abfd, hdr.a_entry);
+  exec_hdr (abfd)->a_info = hdr_len;
+  exec_hdr (abfd)->a_text = a_text;
+  exec_hdr (abfd)->a_data = a_data;
+  exec_hdr (abfd)->a_bss = a_bss;
+  exec_hdr (abfd)->a_syms = a_syms;
+  exec_hdr (abfd)->a_entry = abfd->start_address
+			   = H_GET_32 (abfd, hdr.a_entry);
+  exec_hdr (abfd)->a_trsize = a_trsize;
+  exec_hdr (abfd)->a_drsize = a_drsize;
+  exec_hdr (abfd)->a_tload = a_tbase;
+  exec_hdr (abfd)->a_dload = a_dbase;
 
   section = bfd_make_section (abfd, ".text");
   if (section == NULL)
@@ -122,9 +182,8 @@ elks_object_p (bfd *abfd)
 
   section->flags = (SEC_ALLOC | SEC_LOAD | SEC_CODE | SEC_HAS_CONTENTS);
   section->filepos = hdr_len;
-  text_size = H_GET_32 (abfd, hdr.a_text);
 
-  if (bfd_seek (abfd, (file_ptr) (section->filepos + text_size), SEEK_SET)
+  if (bfd_seek (abfd, (file_ptr) (section->filepos + a_text), SEEK_SET)
       != 0)
     {
       if (bfd_get_error () != bfd_error_system_call)
@@ -133,7 +192,7 @@ elks_object_p (bfd *abfd)
     }
 
   bfd_set_section_vma (abfd, section, 0);
-  bfd_set_section_size (abfd, section, text_size);
+  bfd_set_section_size (abfd, section, a_text);
   section->alignment_power = 0;
 
   section = bfd_make_section (abfd, ".data");
@@ -141,10 +200,9 @@ elks_object_p (bfd *abfd)
     return NULL;
 
   section->flags = (SEC_ALLOC | SEC_LOAD | SEC_DATA | SEC_HAS_CONTENTS);
-  section->filepos = hdr_len + text_size;
-  data_size = H_GET_32 (abfd, hdr.a_data);
+  section->filepos = hdr_len + a_text;
 
-  if (bfd_seek (abfd, (file_ptr) (section->filepos + text_size + data_size),
+  if (bfd_seek (abfd, (file_ptr) (section->filepos + a_text + a_data),
 		SEEK_SET) != 0)
     {
       if (bfd_get_error () != bfd_error_system_call)
@@ -153,8 +211,8 @@ elks_object_p (bfd *abfd)
     }
 
   bfd_set_section_vma (abfd, section, 0);
-  bfd_section_lma (abfd, section) = text_size;
-  bfd_set_section_size (abfd, section, data_size);
+  bfd_section_lma (abfd, section) = a_text;
+  bfd_set_section_size (abfd, section, a_data);
   section->alignment_power = 0;
 
   section = bfd_make_section (abfd, ".bss");
@@ -162,10 +220,9 @@ elks_object_p (bfd *abfd)
     return NULL;
 
   section->flags = (SEC_ALLOC | SEC_DATA);
-  bss_size = H_GET_32 (abfd, hdr.a_bss);
-  bfd_set_section_vma (abfd, section, data_size);
-  bfd_section_lma (abfd, section) = text_size + data_size;
-  bfd_set_section_size (abfd, section, bss_size);
+  bfd_set_section_vma (abfd, section, a_data);
+  bfd_section_lma (abfd, section) = a_text + a_data;
+  bfd_set_section_size (abfd, section, a_bss);
   section->alignment_power = 0;
 
   return abfd->xvec;
