@@ -695,6 +695,7 @@ NAME (aout, mkobject) (bfd *abfd)
 {
   struct aout_data_struct *rawptr;
   size_t amt = sizeof (* rawptr);
+  unsigned i;
 
   bfd_set_error (bfd_error_system_call);
 
@@ -708,6 +709,8 @@ NAME (aout, mkobject) (bfd *abfd)
   obj_textsec (abfd) = NULL;
   obj_datasec (abfd) = NULL;
   obj_bsssec (abfd) = NULL;
+  for (i = 0; i < NOVL; ++i)
+    obj_ovsec (abfd, i) = NULL;
 
   return true;
 }
