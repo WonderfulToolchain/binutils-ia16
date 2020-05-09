@@ -51,9 +51,9 @@ struct elks_aout_header
   /* Not yet implemented in ELKS. */
   uint8_t a_ftext[2];			/* Size of far text section in
 					   bytes. */
-  uint8_t a_ftrsize[2];			/* Length of far text relocation
+  uint8_t a_ftrsize[4];			/* Length of far text relocation
 					   info. */
-  uint8_t a_unused2[12];		/* Reserved; should be 0. */
+  uint8_t a_unused2[10];		/* Reserved; should be 0. */
 };
 
 /* Minimum ELKS a.out header size. */
@@ -176,15 +176,12 @@ elks_object_p (bfd *abfd)
     {
     case sizeof (hdr):
       a_ftext = H_GET_16 (abfd, hdr.a_ftext);
-      a_ftrsize = H_GET_16 (abfd, hdr.a_ftrsize);
+      a_ftrsize = H_GET_32 (abfd, hdr.a_ftrsize);
       /* fall through */
 
     case offsetof (struct elks_aout_header, a_ftext):
       a_tbase = H_GET_32 (abfd, hdr.a_tbase);
       a_dbase = H_GET_32 (abfd, hdr.a_tbase);
-      /* fall through */
-
-    case offsetof (struct elks_aout_header, a_tbase):
       a_trsize = H_GET_32 (abfd, hdr.a_trsize);
       a_drsize = H_GET_32 (abfd, hdr.a_drsize);
       /* fall through */
@@ -193,6 +190,14 @@ elks_object_p (bfd *abfd)
       break;
 
     default:
+      bfd_set_error (bfd_error_wrong_format);
+      return NULL;
+    }
+
+  if (a_trsize % sizeof (struct elks_aout_reloc) != 0
+      || a_drsize % sizeof (struct elks_aout_reloc) != 0
+      || a_ftrsize % sizeof (struct elks_aout_reloc) != 0)
+    {
       bfd_set_error (bfd_error_wrong_format);
       return NULL;
     }
@@ -389,10 +394,8 @@ elks_prime_header (bfd *abfd)
 
   if (a_ftext || a_ftrsize)
     hdr_len = sizeof (struct elks_aout_header);
-  else if (a_tbase || a_dbase)
+  else if (a_trsize || a_drsize || a_tbase || a_dbase)
     hdr_len = offsetof (struct elks_aout_header, a_ftext);
-  else if (a_trsize || a_drsize)
-    hdr_len = offsetof (struct elks_aout_header, a_tbase);
   else
     hdr_len = ELKS_MIN_HDR_SIZE;
 
@@ -528,17 +531,14 @@ elks_write_object_contents (bfd *abfd)
       a_drsize = exec_hdr (abfd)->a_drsize;
       H_PUT_32 (abfd, a_trsize, hdr.a_trsize);
       H_PUT_32 (abfd, a_drsize, hdr.a_drsize);
-      if (hdr_len > offsetof (struct elks_aout_header, a_tbase))
+      H_PUT_32 (abfd, exec_hdr (abfd)->a_tload, hdr.a_tbase);
+      H_PUT_32 (abfd, exec_hdr (abfd)->a_dload, hdr.a_dbase);
+      if (hdr_len > offsetof (struct elks_aout_header, a_ftext))
 	{
-	  H_PUT_32 (abfd, exec_hdr (abfd)->a_tload, hdr.a_tbase);
-	  H_PUT_32 (abfd, exec_hdr (abfd)->a_dload, hdr.a_dbase);
-	  if (hdr_len > offsetof (struct elks_aout_header, a_ftext))
-	    {
-	      a_ftext = exec_hdr (abfd)->ov_siz[0];
-	      a_ftrsize = exec_hdr (abfd)->ov_siz[1];
-	      H_PUT_16 (abfd, a_ftext, hdr.a_ftext);
-	      H_PUT_16 (abfd, a_ftrsize, hdr.a_ftrsize);
-	    }
+	  a_ftext = exec_hdr (abfd)->ov_siz[0];
+	  a_ftrsize = exec_hdr (abfd)->ov_siz[1];
+	  H_PUT_16 (abfd, a_ftext, hdr.a_ftext);
+	  H_PUT_32 (abfd, a_ftrsize, hdr.a_ftrsize);
 	}
     }
 
@@ -551,12 +551,12 @@ elks_write_object_contents (bfd *abfd)
   if (! elks_squirt_out_relocs (abfd, obj_textsec (abfd),
 				(file_ptr) hdr_len + a_text + a_ftext
 				+ a_data)
-      || ! elks_squirt_out_relocs (abfd, obj_datasec (abfd),
-				   (file_ptr) hdr_len + a_text + a_ftext
-				   + a_data + a_trsize)
       || ! elks_squirt_out_relocs (abfd, obj_ovsec (abfd, 0),
 				   (file_ptr) hdr_len + a_text + a_ftext
-				   + a_data + a_trsize + a_drsize))
+				   + a_data + a_trsize)
+      || ! elks_squirt_out_relocs (abfd, obj_datasec (abfd),
+				   (file_ptr) hdr_len + a_text + a_ftext
+				   + a_data + a_trsize + a_ftrsize))
     return FALSE;
 
   return TRUE;
@@ -646,15 +646,15 @@ elks_slurp_reloc_table (bfd *abfd, asection *sec)
       pos = reloc_areas_start;
       rsize = a_trsize;
     }
-  else if (sec == obj_datasec (abfd))
-    {
-      pos = reloc_areas_start + a_trsize;
-      rsize = exec_hdr (abfd)->a_drsize;
-    }
   else if (sec == obj_ovsec (abfd, 0))
     {
-      pos = reloc_areas_start + a_trsize + exec_hdr (abfd)->a_drsize;
+      pos = reloc_areas_start + a_trsize;
       rsize = exec_hdr (abfd)->ov_siz[1];
+    }
+  else if (sec == obj_datasec (abfd))
+    {
+      pos = reloc_areas_start + a_trsize + exec_hdr (abfd)->ov_siz[1];
+      rsize = exec_hdr (abfd)->a_drsize;
     }
   else
     {
