@@ -1396,7 +1396,9 @@ ei386bsd.c: $(srcdir)/emulparams/i386bsd.sh \
   $(srcdir)/emultempl/generic.em $(srcdir)/scripttempl/aout.sc ${GEN_DEPENDS}
 
 ei386elks.c: $(srcdir)/emulparams/i386elks.sh \
-  $(srcdir)/emultempl/generic.em $(srcdir)/scripttempl/i386elks.sc ${GEN_DEPENDS}
+  $(srcdir)/emultempl/generic.em \
+  $(srcdir)/emultempl/i386elks.em \
+  $(srcdir)/scripttempl/i386elks.sc ${GEN_DEPENDS}
 
 ei386go32.c: $(srcdir)/emulparams/i386go32.sh \
   $(srcdir)/emultempl/generic.em $(srcdir)/scripttempl/i386go32.sc \
