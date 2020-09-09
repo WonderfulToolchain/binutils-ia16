@@ -13211,6 +13211,8 @@ tc_gen_reloc (asection *section ATTRIBUTE_UNUSED, fixS *fixp)
     case BFD_RELOC_386_TLS_GOTDESC:
     case BFD_RELOC_386_TLS_DESC_CALL:
     case BFD_RELOC_386_SEG16:
+    case BFD_RELOC_386_SUB16:
+    case BFD_RELOC_386_SUB32:
     case BFD_RELOC_X86_64_TLSGD:
     case BFD_RELOC_X86_64_TLSLD:
     case BFD_RELOC_X86_64_DTPOFF32:
