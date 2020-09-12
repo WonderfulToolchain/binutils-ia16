@@ -4077,7 +4077,7 @@ void
 md_assemble (char *line)
 {
   unsigned int j;
-  char mnemonic[MAX_MNEM_SIZE], mnem_suffix;
+  char mnemonic[MAX_MNEM_SIZE] = "", mnem_suffix;
   const insn_template *t;
 
   /* Initialize globals.  */
@@ -12396,6 +12396,7 @@ tc_gen_reloc (asection *section ATTRIBUTE_UNUSED, fixS *fixp)
 	      rel->sym_ptr_ptr = XNEW (asymbol *);
 	      *rel->sym_ptr_ptr = symbol_get_bfdsym (baseP);
 	      rel->address = fixp->fx_frag->fr_address + fixp->fx_where;
+	      rel->addend = 0;
 	      rel->howto = bfd_reloc_type_lookup (stdoutput, code);
 	      gas_assert (rel->howto != NULL);
 	    }
