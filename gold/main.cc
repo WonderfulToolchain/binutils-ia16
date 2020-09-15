@@ -26,7 +26,14 @@
 #include <cstring>
 
 #ifdef HAVE_MALLINFO
+#ifdef __DJGPP__
+extern "C"
+{
+#include <libc/malldbg.h>
+}
+#else
 #include <malloc.h>
+#endif
 #endif
 
 #include "libiberty.h"
