@@ -67,6 +67,9 @@
    language is requested. */
 #undef ENABLE_NLS
 
+/* Define to support H. P. Anvin's proposed x86 segelf relocations */
+#undef ENABLE_X86_HPA_SEGELF
+
 /* Define to 1 if you have `alloca', as a function or macro. */
 #undef HAVE_ALLOCA
 
