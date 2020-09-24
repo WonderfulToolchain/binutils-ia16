@@ -21,6 +21,7 @@
 #ifndef TC_I386
 #define TC_I386 1
 
+#include "config.h"
 #include "opcodes/i386-opc.h"
 
 struct fix;
@@ -475,11 +476,13 @@ extern unsigned char x86_sframe_get_abi_arch (void);
 extern int i386_elf_validate_fix_sub (struct fix *, segT);
 #define TC_VALIDATE_FIX_SUB i386_elf_validate_fix_sub
 
+#ifdef ENABLE_X86_HPA_SEGELF
 extern void i386_elf_symbol_new_hook (symbolS *);
 #define tc_symbol_new_hook i386_elf_symbol_new_hook
 
 extern int i386_elf_frob_symbol (symbolS *);
 #define tc_frob_symbol(symbolP, punt) ((punt) = i386_elf_frob_symbol (symbolP))
+#endif
 #endif
 
 #define RELOC_EXPANSION_POSSIBLE 1
