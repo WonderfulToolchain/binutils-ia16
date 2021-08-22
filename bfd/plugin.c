@@ -394,13 +394,15 @@ load_plugin (bfd *abfd)
     {
       char *full_name;
       struct stat s;
-      int valid_plugin;
 
       full_name = concat (p, "/", ent->d_name, NULL);
-      if (stat (full_name, &s) == 0 && S_ISREG (s.st_mode))
-	found = try_load_plugin (full_name, abfd, &valid_plugin);
-      if (has_plugin <= 0)
-	has_plugin = valid_plugin;
+      if (stat (full_name, &s) == 0 && S_ISREG (s.st_mode)) {
+        int valid_plugin;
+
+        found = try_load_plugin (full_name, abfd, &valid_plugin);
+        if (has_plugin <= 0)
+          has_plugin = valid_plugin;
+      }
       free (full_name);
       if (found)
 	break;
