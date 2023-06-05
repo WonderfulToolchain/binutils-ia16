@@ -74,7 +74,9 @@ usage and use x86-64 as target platform).
 
 @cindex @samp{--32-segelf} option, i386
 @cindex @samp{--32-segelf} option, x86-64
-@item --32-segelf
+@cindex @samp{--16-segelf} option, i386
+@cindex @samp{--16-segelf} option, x86-64
+@item --32-segelf | --16-segelf
 Select the Intel i386 architecture, and produce an object file which
 follows H.@: Peter Anvin's proposed 16-bit segmented code ABI,
 @url{https://git.zytor.com/users/hpa/segelf/abi.git/plain/segelf.txt}.

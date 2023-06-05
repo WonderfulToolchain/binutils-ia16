@@ -18088,6 +18088,8 @@ md_show_usage (FILE *stream)
 #if defined (OBJ_ELF) || defined (OBJ_MAYBE_ELF)
   fprintf (stream, _("\
   --32-segelf             generate 32bit code, use IA-16 segmentation ABI\n"));
+  fprintf (stream, _("\
+  --16-segelf             generate 16bit code, use IA-16 segmentation ABI\n"));
 #endif
 #ifdef SVR4_COMMENT_CHARS
   fprintf (stream, _("\
