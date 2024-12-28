@@ -2304,6 +2304,7 @@ elf_i386_relocate_section (bfd *output_bfd,
   for (; rel < relend; wrel++, rel++)
     {
       unsigned int r_type, r_type_tls;
+      struct reloc_howto_struct howto_modified;
       reloc_howto_type *howto;
       unsigned long r_symndx;
       struct elf_link_hash_entry *h;

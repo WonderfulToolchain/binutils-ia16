@@ -127,7 +127,7 @@ elks_object_p (bfd *abfd)
   long a_version;
 
   if (bfd_seek (abfd, (file_ptr) 0, SEEK_SET) != 0
-      || bfd_bread (&hdr, (bfd_size_type) sizeof (hdr), abfd) < sizeof (hdr))
+      || bfd_read (&hdr, (bfd_size_type) sizeof (hdr), abfd) < sizeof (hdr))
     {
       if (bfd_get_error () != bfd_error_system_call)
 	bfd_set_error (bfd_error_wrong_format);
@@ -136,7 +136,7 @@ elks_object_p (bfd *abfd)
 
   /* For now, only accept separate I/D executables for the 8086 with simple
      headers. */
-  n_read = bfd_bread (&hdr, (bfd_size_type) sizeof (hdr), abfd);
+  n_read = bfd_read (&hdr, (bfd_size_type) sizeof (hdr), abfd);
   hdr_len = hdr.a_hdrlen;
   if (n_read < ELKS_MIN_HDR_SIZE || hdr_len > n_read)
     {
@@ -490,7 +490,7 @@ elks_squirt_out_relocs (bfd *abfd, asection *sec, file_ptr pos)
       H_PUT_16 (abfd, sym_ndx, aout_rel.r_symndx);
       H_PUT_16 (abfd, R_SEGWORD, aout_rel.r_type);
 
-      if (bfd_bwrite (&aout_rel, sizeof (aout_rel), abfd) != sizeof (aout_rel))
+      if (bfd_write (&aout_rel, sizeof (aout_rel), abfd) != sizeof (aout_rel))
 	return false;
     }
 
@@ -598,7 +598,7 @@ elks_write_object_contents (bfd *abfd)
 
   /* Write out the header. */
   if (bfd_seek (abfd, (file_ptr) 0, SEEK_SET) != 0
-      || bfd_bwrite (&hdr, hdr_len, abfd) != hdr_len)
+      || bfd_write (&hdr, hdr_len, abfd) != hdr_len)
     return false;
 
   /* Also write out relocations (!). */
@@ -654,7 +654,7 @@ elks_set_section_contents (bfd *abfd,
 
   if (count != 0)
     if (bfd_seek (abfd, section->filepos + offset, SEEK_SET) != 0
-	|| bfd_bwrite (location, count, abfd) != count)
+	|| bfd_write (location, count, abfd) != count)
       return false;
 
   return true;
@@ -740,7 +740,7 @@ elks_slurp_reloc_table (bfd *abfd, asection *sec)
       asymbol **sym_ptr_ptr;
       reloc_howto_type *howto;
 
-      if (bfd_bread (&aout_rel, sizeof (aout_rel), abfd) != sizeof (aout_rel))
+      if (bfd_read (&aout_rel, sizeof (aout_rel), abfd) != sizeof (aout_rel))
 	{
 	  free (reloc_cache);
 	  return false;
@@ -900,6 +900,7 @@ elks_set_heap_and_minstack (bfd *abfd, bfd_vma stack_size, bfd_vma heap_size,
 #define elks_get_symbol_version_string \
   _bfd_nosymbols_get_symbol_version_string
 #define elks_find_nearest_line _bfd_nosymbols_find_nearest_line
+#define elks_find_nearest_line_with_alt _bfd_nosymbols_find_nearest_line_with_alt
 #define elks_find_line _bfd_nosymbols_find_line
 #define elks_find_inliner_info _bfd_nosymbols_find_inliner_info
 #define elks_get_lineno _bfd_nosymbols_get_lineno

@@ -13342,6 +13342,8 @@ lex_got (enum bfd_reloc_code_real *rel,
     gotrel[] =
   {
 
+#define OPERAND_TYPE_IMM16 { .bitfield = \
+  { .imm16 = 1 } }
 #define OPERAND_TYPE_IMM32_32S_DISP32 { .bitfield = \
   { .imm32 = 1, .imm32s = 1, .disp32 = 1 } }
 #define OPERAND_TYPE_IMM32_32S_64_DISP32 { .bitfield = \
@@ -13355,7 +13357,7 @@ lex_got (enum bfd_reloc_code_real *rel,
 #if defined (OBJ_ELF) || defined (OBJ_MAYBE_ELF)
     { STRING_COMMA_LEN ("SIZE"),      { BFD_RELOC_SIZE32,
 					BFD_RELOC_SIZE32 },
-      { .bitfield = { .imm32 = 1, .imm64 = 1 } }, false },
+      4|8, { .bitfield = { .imm32 = 1, .imm64 = 1 } }, false },
     { STRING_COMMA_LEN ("OZSEG16"),   { BFD_RELOC_386_OZSEG16,
 				       _dummy_first_bfd_reloc_code_real },
       2, OPERAND_TYPE_NONE, false },
@@ -13375,7 +13377,7 @@ lex_got (enum bfd_reloc_code_real *rel,
 #endif
     { STRING_COMMA_LEN ("PLTOFF"),   { _dummy_first_bfd_reloc_code_real,
 				       BFD_RELOC_X86_64_PLTOFF64 },
-      { .bitfield = { .imm64 = 1 } }, true },
+      4|8, { .bitfield = { .imm64 = 1 } }, true },
     { STRING_COMMA_LEN ("PLT"),      { BFD_RELOC_386_PLT32,
 				       BFD_RELOC_X86_64_PLT32    },
       4|8, OPERAND_TYPE_IMM32_32S_DISP32, false },
@@ -13673,34 +13675,49 @@ x86_cons (expressionS *exp, int size)
 #if ((defined (OBJ_ELF) || defined (OBJ_MAYBE_ELF)) \
       && !defined (LEX_AT)) \
     || defined (TE_PE)
-  if (size == 4 || (object_64bit && size == 8))
+  if (1) /* (size == 4 || (object_64bit && size == 8)) */
     {
-      /* expression () has merrily parsed up to the end of line,
-	 or a comma - in the wrong buffer.  Transfer how far
-	 input_line_pointer has moved to the right buffer.  */
-      input_line_pointer = (save
-			    + (input_line_pointer - gotfree_input_line)
-			    + adjust);
-      free (gotfree_input_line);
-      if (exp->X_op == O_constant
-	  || exp->X_op == O_absent
-	  || exp->X_op == O_illegal
-	  || exp->X_op == O_register
-	  || exp->X_op == O_big)
+      /* Handle @GOTOFF and the like in an expression.  */
+      char *save;
+      char *gotfree_input_line;
+      int adjust = 0;
+
+      save = input_line_pointer;
+      gotfree_input_line = lex_got (&got_reloc, &adjust, NULL, size);
+      if (gotfree_input_line)
+	input_line_pointer = gotfree_input_line;
+
+      expression (exp);
+
+      if (gotfree_input_line)
 	{
-	  char c = *input_line_pointer;
-	  *input_line_pointer = 0;
-	  as_bad (_("missing or invalid expression `%s'"), save);
-	  *input_line_pointer = c;
-	}
-      else if ((got_reloc == BFD_RELOC_386_PLT32
-		|| got_reloc == BFD_RELOC_X86_64_PLT32)
-	       && exp->X_op != O_symbol)
-	{
-	  char c = *input_line_pointer;
-	  *input_line_pointer = 0;
-	  as_bad (_("invalid PLT expression `%s'"), save);
-	  *input_line_pointer = c;
+	  /* expression () has merrily parsed up to the end of line,
+	     or a comma - in the wrong buffer.  Transfer how far
+	     input_line_pointer has moved to the right buffer.  */
+	  input_line_pointer = (save
+				+ (input_line_pointer - gotfree_input_line)
+				+ adjust);
+	  free (gotfree_input_line);
+	  if (exp->X_op == O_constant
+	      || exp->X_op == O_absent
+	      || exp->X_op == O_illegal
+	      || exp->X_op == O_register
+	      || exp->X_op == O_big)
+	    {
+	      char c = *input_line_pointer;
+	      *input_line_pointer = 0;
+	      as_bad (_("missing or invalid expression `%s'"), save);
+	      *input_line_pointer = c;
+	    }
+	  else if ((got_reloc == BFD_RELOC_386_PLT32
+		    || got_reloc == BFD_RELOC_X86_64_PLT32)
+		   && exp->X_op != O_symbol)
+	    {
+	      char c = *input_line_pointer;
+	      *input_line_pointer = 0;
+	      as_bad (_("invalid PLT expression `%s'"), save);
+	      *input_line_pointer = c;
+	    }
 	}
     }
   else

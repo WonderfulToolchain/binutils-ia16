@@ -308,7 +308,7 @@ cond_extern_name_list:
 		{ $<integer>$ = ldgram_cond;
 		  if (ldgram_cond)
 		    {
-		      exp_fold_tree_no_dot ($2);
+		      exp_fold_tree_no_dot ($2, NULL);
 		      if (! expld.result.valid_p)
 			einfo (_("\
 %X%P:%pS: cannot evaluate condition for EXTERN\n"), NULL);
@@ -446,7 +446,7 @@ cond_input_list:
 		  { $<integer>$ = ldgram_cond;
 		    if (ldgram_cond)
 		      {
-			exp_fold_tree_no_dot ($2);
+			exp_fold_tree_no_dot ($2, NULL);
 			if (! expld.result.valid_p)
 			  einfo (_("\
 %X%P:%pS: cannot evaluate condition for INPUT\n"), NULL);
