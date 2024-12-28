@@ -97,7 +97,7 @@ static reloc_howto_type elf_howto_table[]=
   HOWTO(R_386_TLS_LDM, 0, 4, 32, false, 0, complain_overflow_dont,
 	bfd_elf_generic_reloc, "R_386_TLS_LDM",
 	true, 0xffffffff, 0xffffffff, false),
-  HOWTO(R_386_16, 0, 2, 16, false, 0, complain_overflow_bitfield,
+  HOWTO(R_386_16, 0, 2, 16, false, 0, complain_overflow_dont,
 	bfd_elf_generic_reloc, "R_386_16",
 	true, 0xffff, 0xffff, false),
   HOWTO(R_386_PC16, 0, 2, 16, true, 0, complain_overflow_bitfield,
@@ -154,7 +154,7 @@ static reloc_howto_type elf_howto_table[]=
 #define R_386_ext2 (R_386_GOT32X + 1 - R_386_tls_offset)
 #define R_386_seg16_offset (R_386_SEG16 - R_386_ext2)
 
-  HOWTO(R_386_SEG16, 4, 2, 16, false, 0, complain_overflow_bitfield,
+  HOWTO(R_386_SEG16, 4, 2, 16, false, 0, complain_overflow_dont,
 	bfd_elf_generic_reloc, "R_386_SEG16",
 	true, 0xffff, 0xffff, false),
   HOWTO(R_386_SUB16, 0, 2, 16, false, 0, complain_overflow_dont,
